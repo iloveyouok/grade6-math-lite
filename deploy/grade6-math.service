@@ -1,0 +1,19 @@
+[Unit]
+Description=Grade 6 Math Teacher Workbench (Lite & Fast)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/grade6-math-lite
+Environment="PATH=/opt/grade6-math-lite/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/grade6-math-lite/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+
+# Low-memory resource protection for 2GB RAM
+MemoryHigh=450M
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target

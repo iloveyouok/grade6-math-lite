@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教师登录 · 六年级数学工作台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #F8F7F3;
+      color: #23322B;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    .font-editorial {
+      font-family: "Songti SC", "SimSun", "STSong", "Noto Serif CJK SC", Georgia, serif;
+    }
+    .editorial-arrow {
+      display: inline-block;
+      width: 22px;
+      height: 16px;
+      transition: transform 0.18s ease;
+      vertical-align: middle;
+    }
+    .group:hover .editorial-arrow,
+    button:hover .editorial-arrow {
+      transform: translate(2px, -2px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-[#B84732] selection:text-white">
+
+  <!-- Header -->
+  <header class="w-full border-b border-[#D6D6CD] px-8 sm:px-14 py-5">
+    <div class="max-w-[1440px] mx-auto flex items-center">
+      <div class="w-[3px] h-5 bg-[#B84732] mr-3"></div>
+      <span class="font-editorial font-bold text-lg text-[#23322B] tracking-tight">六年级数学</span>
+      <span class="text-xs text-[#777D76] ml-2.5">教师工作台</span>
+    </div>
+  </header>
+
+  <!-- Main Split Layout -->
+  <main class="flex-1 max-w-[1440px] w-full mx-auto px-8 sm:px-14 py-12 lg:py-20 flex items-center">
+    <div class="w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
+      
+      <!-- Left Hero Column -->
+      <div class="lg:col-span-7 pr-0 lg:pr-12">
+        <p class="text-[11px] tracking-[0.25em] text-[#777D76] font-medium uppercase mb-6">
+          GRADE 06 / MATHEMATICS
+        </p>
+        <h1 class="font-editorial text-4xl sm:text-5xl lg:text-[54px] font-normal leading-[1.25] text-[#23322B] mb-8">
+          把基础分，<br>
+          <span class="inline-block text-[#23322B]">一分一分拿回来。</span>
+        </h1>
+        <div class="space-y-1.5 text-sm text-[#777D76] leading-relaxed max-w-lg">
+          <p>为 40–58 分临界生建立清晰的练习与验收路径。</p>
+          <p>老师每天只看该做的下一件事。</p>
+        </div>
+      </div>
+
+      <!-- Right Form Column -->
+      <div class="lg:col-span-5 lg:border-l lg:border-[#D6D6CD] lg:pl-16">
+        <div class="max-w-md w-full">
+          <p class="text-[11px] text-[#777D76] tracking-wider uppercase mb-1.5">教师访问</p>
+          <h2 class="font-editorial text-3xl font-medium text-[#23322B] mb-8">进入工作台</h2>
+
+          <form id="loginForm" onsubmit="handleLogin(event)" class="space-y-6">
+            <div>
+              <label for="password" class="block text-xs text-[#777D76] mb-2">访问密码</label>
+              <input type="password" id="password" required autofocus
+                     class="w-full bg-transparent border-0 border-b border-[#D6D6CD] focus:border-[#23322B] text-lg text-[#23322B] py-2 px-0 outline-none transition placeholder:text-[#A0A59E] tracking-widest font-mono"
+                     placeholder="••••••••">
+              <span class="block text-[11px] text-[#777D76] mt-2">请输入学校提供的教师访问密码。</span>
+            </div>
+
+            <div id="errorMsg" class="hidden text-xs text-[#B84732] pt-1"></div>
+
+            <div class="pt-4">
+              <button type="submit" id="submitBtn"
+                      class="group w-full py-3.5 px-6 bg-[#23322B] hover:bg-[#1A2620] active:bg-[#121B17] text-white text-sm font-medium transition duration-150 flex items-center justify-between outline-none focus:ring-1 focus:ring-[#23322B]">
+                <span id="btnText">登录</span>
+                <svg class="editorial-arrow" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                  <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                  <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="w-full border-t border-[#D6D6CD] px-8 sm:px-14 py-4 text-xs text-[#777D76]">
+    <div class="max-w-[1440px] mx-auto flex items-center justify-between">
+      <span>六年级数学 · 教师端</span>
+      <span class="flex items-center">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#B84732] mr-1.5"></span>
+        <span>单教师微内核安全接入</span>
+      </span>
+    </div>
+  </footer>
+
+  <script>
+    async function handleLogin(e) {
+      e.preventDefault();
+      const pwd = document.getElementById('password').value.trim();
+      const errDiv = document.getElementById('errorMsg');
+      const btn = document.getElementById('submitBtn');
+      const btnText = document.getElementById('btnText');
+      errDiv.classList.add('hidden');
+
+      btn.disabled = true;
+      btnText.innerText = '正在验证...';
+
+      try {
+        const resp = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password: pwd})
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          localStorage.setItem('g6_session', data.message);
+          window.location.href = '/';
+        } else {
+          errDiv.innerText = data.detail || '密码错误，请核对后重试';
+          errDiv.classList.remove('hidden');
+        }
+      } catch (err) {
+        errDiv.innerText = '网络连接失败，请确认服务已启动';
+        errDiv.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btnText.innerText = '登录';
+      }
+    }
+  </script>
+</body>
+</html>

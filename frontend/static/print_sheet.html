@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ batch_title }} - A4 冲刺巩固单</title>
+  <!-- KaTeX CSS & JS for Math Formula Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 8mm 10mm 8mm 10mm;
+    }
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+      color: #1a202c;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+      font-size: 12.5px;
+      line-height: 1.4;
+    }
+    .student-page {
+      page-break-after: always;
+      break-after: page;
+      height: 270mm;
+      max-height: 270mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .teacher-page {
+      page-break-after: auto;
+      break-after: auto;
+      height: 270mm;
+      max-height: 270mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .header {
+      border-bottom: 2px solid #2b6cb0;
+      padding-bottom: 3px;
+      margin-bottom: 6px;
+    }
+    .header-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #2b6cb0;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+    .meta-bar {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #4a5568;
+    }
+    .question-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 6px 12px;
+      flex-grow: 1;
+    }
+    .q-card {
+      border: 1px solid #cbd5e0;
+      border-radius: 4px;
+      padding: 5px 7px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: #fafafa;
+      height: 57mm;
+      max-height: 57mm;
+      overflow: hidden;
+    }
+    .q-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+      font-size: 11px;
+    }
+    .q-tag {
+      font-size: 10px;
+      padding: 1px 3px;
+      border-radius: 3px;
+      font-weight: 500;
+    }
+    .tag-warmup { background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+    .tag-redo { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
+    .tag-variant { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+    .q-content {
+      font-size: 11.5px;
+      line-height: 1.35;
+      color: #2d3748;
+      margin-bottom: 2px;
+    }
+    .blank-workspace {
+      height: 25mm;
+      border: 1px dashed #cbd5e0;
+      border-radius: 3px;
+      background: #ffffff;
+      position: relative;
+    }
+    .blank-workspace::after {
+      content: "解答与竖式草稿区";
+      position: absolute;
+      right: 4px;
+      bottom: 2px;
+      font-size: 9px;
+      color: #a0aec0;
+    }
+    .footer-bar {
+      border-top: 1px dashed #cbd5e0;
+      padding-top: 3px;
+      margin-top: 3px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: #718096;
+    }
+    /* Teacher Page */
+    .t-section {
+      margin-bottom: 8px;
+      border-bottom: 1px solid #edf2f7;
+      padding-bottom: 6px;
+    }
+    .t-title {
+      font-size: 13px;
+      font-weight: bold;
+      color: #2d3748;
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-bottom: 4px;
+    }
+    .t-script {
+      color: #805ad5;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  {% for stu in students_data %}
+  <!-- Student Individual A4 Page -->
+  <div class="student-page">
+    <div class="header">
+      <div class="header-title">小学六年级数学“保及格”个性化巩固单</div>
+      <div class="meta-bar">
+        <span>班级：<strong>{{ stu.class_name }}</strong></span>
+        <span>座号：<strong>{{ stu.student_no }}</strong></span>
+        <span>姓名：<strong>{{ stu.student_name }}</strong></span>
+        <span>目标：稳拿基础 <strong>冲刺 65–70 分</strong></span>
+        <span>批次：{{ stu.batch_code }}</span>
+      </div>
+    </div>
+
+    <div class="question-grid">
+      {% for item in stu.sheet_items %}
+      <div class="q-card">
+        <div>
+          <div class="q-header">
+            <strong>题号 {{ loop.index }}</strong>
+            {% if item.item_type == 'calc_warmup' %}
+            <span class="q-tag tag-warmup">L1基础计算热身</span>
+            {% elif item.item_type == 'mistake_redo' %}
+            <span class="q-tag tag-redo">顽固错题精准重练</span>
+            {% else %}
+            <span class="q-tag tag-variant">同源保底变式 (沙箱已验算)</span>
+            {% endif %}
+          </div>
+          <div class="q-content">{{ item.question_md }}</div>
+        </div>
+        <div class="blank-workspace"></div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="footer-bar">
+      <span>★ 认真审题，步骤分步列出，计算结果务必化成最简分数。</span>
+      <span>教师反馈：[ ] 全部过关 [ ] 面批订正中 &nbsp;&nbsp; 批阅日期：____月____日</span>
+    </div>
+  </div>
+  {% endfor %}
+
+  <!-- Teacher Answer Key & 3-Min Face-to-Face Script Page (Final Page) -->
+  <div class="teacher-page">
+    <div class="header" style="border-bottom-color: #718096;">
+      <div class="header-title" style="color: #4a5568;">《教师参考答案与 3 分钟面批话术速查表》</div>
+      <div class="meta-bar">
+        <span>批次号：{{ batch_code }}</span>
+        <span>适用对象：40–58 分临界生针对性面批辅导</span>
+        <span>生成时间：{{ generated_date }}</span>
+      </div>
+    </div>
+
+    {% for stu in students_data %}
+    <div class="t-section">
+      <div class="t-title">
+        学生：{{ stu.student_name }} (座号: {{ stu.student_no }}, 匿名码: {{ stu.anonymous_code }})
+      </div>
+      <div style="font-size: 11px; color: #4a5568; margin-bottom: 4px;">
+        <strong>【3分钟面批反问提示】</strong>：<span class="t-script">{{ stu.face_to_face_script or "请紧扣单位'1'与运算顺序反问，引导学生自主说出第一步算什么。" }}</span>
+      </div>
+      <table style="width: 100%; border-collapse: collapse; font-size: 10.5px; border: 1px solid #e2e8f0;">
+        <thead>
+          <tr style="background: #f7fafc; text-align: left;">
+            <th style="padding: 3px; border: 1px solid #e2e8f0; width: 45px;">题号</th>
+            <th style="padding: 3px; border: 1px solid #e2e8f0; width: 75px;">类型</th>
+            <th style="padding: 3px; border: 1px solid #e2e8f0;">规范解答步骤与小学算术关键点</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in stu.sheet_items %}
+          <tr>
+            <td style="padding: 3px; border: 1px solid #e2e8f0; text-align: center;">第 {{ loop.index }} 题</td>
+            <td style="padding: 3px; border: 1px solid #e2e8f0;">
+              {% if item.item_type == 'calc_warmup' %}计算热身{% elif item.item_type == 'mistake_redo' %}错题重练{% else %}同源变式{% endif %}
+            </td>
+            <td style="padding: 3px; border: 1px solid #e2e8f0;">
+              {{ item.answer_steps_md }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+
+</body>
+</html>

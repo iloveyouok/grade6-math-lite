@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>六年级数学 · 教师工作台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- QRCode CDN for Mobile Upload Link -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <!-- KaTeX CDN for Formula Rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <style>
+    [v-cloak] { display: none; }
+    body {
+      background-color: #F8F7F3;
+      color: #23322B;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    .font-editorial {
+      font-family: "Songti SC", "SimSun", "STSong", "Noto Serif CJK SC", Georgia, serif;
+    }
+    .font-mono-num {
+      font-family: Georgia, Cambria, "Times New Roman", Times, serif;
+      font-feature-settings: "tnum";
+      font-variant-numeric: tabular-nums;
+    }
+    .editorial-arrow {
+      display: inline-block;
+      width: 20px;
+      height: 14px;
+      transition: transform 0.18s ease;
+      vertical-align: middle;
+    }
+    .group:hover .editorial-arrow,
+    button:hover .editorial-arrow,
+    a:hover .editorial-arrow {
+      transform: translate(2px, -2px);
+    }
+    /* Clean custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F8F7F3;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #D6D6CD;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #A0A59E;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-[#B84732] selection:text-white">
+  <div id="app" v-cloak class="flex flex-col min-h-screen">
+
+    <!-- Top Navigation Bar (Shared across all workbench views) -->
+    <header class="w-full border-b border-[#D6D6CD] bg-[#F8F7F3] sticky top-0 z-40">
+      <div class="max-w-[1440px] mx-auto px-6 sm:px-12 h-16 flex items-center justify-between">
+        <!-- Brand / Logo -->
+        <div class="flex items-center cursor-pointer select-none" @click="setNav('home')">
+          <div class="w-[3px] h-4 bg-[#B84732] mr-3"></div>
+          <span class="font-editorial font-bold text-lg text-[#23322B] tracking-tight">六年级数学</span>
+          <span class="text-xs text-[#777D76] ml-2 font-normal hidden sm:inline">教师工作台</span>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex items-center space-x-6 sm:space-x-10 text-sm">
+          <button @click="setNav('home')"
+                  :class="currentNav === 'home' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                  class="transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">今日</button>
+          <button @click="setNav('students')"
+                  :class="currentNav === 'students' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                  class="transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">学生</button>
+          <button @click="setNav('entry')"
+                  :class="currentNav === 'entry' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                  class="transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">录错</button>
+          <button @click="setNav('sheets')"
+                  :class="currentNav === 'sheets' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                  class="transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">巩固单</button>
+          <button @click="setNav('kb')"
+                  :class="currentNav === 'kb' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                  class="transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">母题库</button>
+        </nav>
+
+        <!-- Right Class Indicator & Logout -->
+        <div class="flex items-center space-x-5 text-xs text-[#777D76]">
+          <span class="text-[#23322B] font-medium hidden sm:inline">六 (1) 班</span>
+          <button @click="logout" class="hover:text-[#B84732] transition-colors underline decoration-[#D6D6CD] underline-offset-4 outline-none focus-visible:ring-1 focus-visible:ring-[#B84732]">退出</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content View Area -->
+    <main class="flex-1 max-w-[1440px] w-full mx-auto px-6 sm:px-12 py-8">
+
+      <!-- ===================================================================== -->
+      <!-- VIEW 00: 今日工作台 (Home) -->
+      <!-- ===================================================================== -->
+      <section v-if="currentNav === 'home'" class="space-y-12">
+        <!-- Top Subheader -->
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-4">
+          <div>
+            <p class="font-mono-num text-xs text-[#777D76] tracking-wider uppercase mb-1">{{ currentDateStr }}</p>
+            <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">今日待办</h1>
+            <p class="text-xs text-[#777D76] mt-1">先处理这一件事</p>
+          </div>
+          <div class="text-right">
+            <span class="text-xs text-[#777D76]">
+              正在跟进 <span class="font-mono-num font-semibold text-[#23322B]">{{ String(overviewData.critical_count).padStart(2, '0') }}</span> 位临界生
+            </span>
+          </div>
+        </div>
+
+        <!-- Pending Task Block (Split Grid: Left Big Number, Right Pending Sheets) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left Column: Pending Sheets Stat -->
+          <div class="lg:col-span-4 border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+            <div class="font-editorial font-normal text-6xl sm:text-7xl text-[#B84732] leading-none mb-3 font-mono-num">
+              {{ String(pendingSheetsCount).padStart(2, '0') }}
+            </div>
+            <h2 class="text-base font-medium text-[#23322B] mb-1">份巩固单，等待验收</h2>
+            <p class="text-xs text-[#777D76] leading-relaxed">
+              看完成情况，再决定下一轮练习。
+            </p>
+          </div>
+
+          <!-- Right Column: Pending Students List -->
+          <div class="lg:col-span-8 border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-[#D6D6CD]">
+              <span class="text-xs font-medium text-[#777D76] uppercase tracking-wider">待完成 / 周一验收</span>
+              <span class="text-xs text-[#777D76]">共 {{ pendingSheetsList.length }} 人</span>
+            </div>
+
+            <!-- List of Pending Sheets -->
+            <div v-if="pendingSheetsList.length > 0" class="divide-y divide-[#D6D6CD]">
+              <div v-for="(sheet, idx) in pendingSheetsList" :key="sheet.id"
+                   class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start sm:items-center space-x-4">
+                  <span class="font-mono-num text-sm text-[#777D76] font-medium w-6">{{ String(idx + 1).padStart(2, '0') }}</span>
+                  <div>
+                    <div class="flex items-center space-x-2">
+                      <span class="font-medium text-sm text-[#23322B]">{{ sheet.student_name }}</span>
+                      <span class="text-xs text-[#777D76]">{{ sheet.student_no ? sheet.student_no + '号' : '' }}</span>
+                    </div>
+                    <div class="text-xs text-[#777D76] mt-0.5">
+                      <span class="text-[#23322B] font-medium">{{ getStudentWeakness(sheet.student_id) }}</span>
+                      <span class="mx-1.5 text-[#D6D6CD]">·</span>
+                      <span>本周巩固单已完成，待核对 8 题</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button @click="openMondayCheckModal(sheet.id)"
+                        class="group inline-flex items-center justify-between px-5 py-2.5 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-xs font-medium transition duration-150 self-end sm:self-auto outline-none focus-visible:ring-1 focus-visible:ring-[#23322B]">
+                  <span>开始验收</span>
+                  <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                    <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                    <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else class="py-12 text-center text-xs text-[#777D76]">
+              <p class="text-sm font-medium text-[#23322B] mb-1">当前暂无等待验收的巩固单</p>
+              <p>可前往“巩固单”标签页为临界生生成本周练习批次。</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lower Section: Need Attention Students Table -->
+        <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+          <div class="flex items-center justify-between mb-6 pb-2 border-b border-[#D6D6CD]">
+            <h2 class="font-editorial text-2xl font-normal text-[#23322B]">需要关注的学生</h2>
+            <button @click="setNav('students')"
+                    class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium transition outline-none">
+              <span>查看全部 {{ overviewData.critical_count }} 人</span>
+              <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead>
+                <tr class="border-b border-[#D6D6CD] text-[#777D76] font-medium">
+                  <th class="py-3 pr-6 font-medium">学生</th>
+                  <th class="py-3 px-6 font-medium">当前估分</th>
+                  <th class="py-3 px-6 font-medium">主要薄弱点</th>
+                  <th class="py-3 px-6 font-medium">下一步</th>
+                  <th class="py-3 pl-6 font-medium text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#D6D6CD]">
+                <tr v-for="stu in overviewData.students" :key="stu.id" class="hover:bg-[#F1EFEA] transition-colors">
+                  <td class="py-4 pr-6">
+                    <span class="font-medium text-sm text-[#23322B]">{{ stu.name }}</span>
+                    <span class="text-xs text-[#777D76] ml-2">{{ stu.student_no ? stu.student_no + '号' : '' }}</span>
+                  </td>
+                  <td class="py-4 px-6 font-mono-num text-sm text-[#23322B]">
+                    {{ stu.current_est_score }}分
+                  </td>
+                  <td class="py-4 px-6 text-[#23322B]">
+                    {{ stu.primary_weakness || '未评估' }}
+                  </td>
+                  <td class="py-4 px-6 text-[#777D76]">
+                    {{ stu.next_action || '安排摸底测验' }}
+                  </td>
+                  <td class="py-4 pl-6 text-right">
+                    <button @click="openStudentTracking(stu.id)"
+                            class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium transition outline-none">
+                      <span>查看学情</span>
+                      <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                        <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                        <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================== -->
+      <!-- VIEW 01 & 02: 录错台 (Fast Entry & Photo OCR) -->
+      <!-- ===================================================================== -->
+      <section v-if="currentNav === 'entry'" class="space-y-8">
+        <!-- Sub Header & Sub-Navigation Tabs -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#D6D6CD] pb-4 gap-4">
+          <div>
+            <p class="text-xs text-[#777D76] tracking-wider uppercase mb-1">
+              {{ fastEntryMode === 'tick' ? '考后录入 / 连续操作' : '错题采集 / 教师核对' }}
+            </p>
+            <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">
+              {{ fastEntryMode === 'tick' ? '快速录错' : '拍照批改' }}
+            </h1>
+            <div class="flex space-x-6 text-xs mt-3">
+              <button @click="switchFastEntryMode('tick')"
+                      :class="fastEntryMode === 'tick' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                      class="transition-colors outline-none">勾题号录错</button>
+              <button @click="switchFastEntryMode('ocr')"
+                      :class="fastEntryMode === 'ocr' ? 'text-[#23322B] font-semibold border-b-2 border-[#23322B] pb-1' : 'text-[#777D76] hover:text-[#23322B] pb-1 border-b-2 border-transparent'"
+                      class="transition-colors outline-none">拍照批改</button>
+            </div>
+          </div>
+          <div class="text-right text-xs text-[#777D76]">
+            <span v-if="fastEntryMode === 'tick'">
+              当前进度 <span class="font-mono-num font-semibold text-[#23322B]">{{ currentStudentIndexDisplay }}</span> / {{ String(overviewData.students.length).padStart(2, '0') }} 位学生
+            </span>
+            <span v-else>识别结果需教师确认</span>
+          </div>
+        </div>
+
+        <!-- TAB A: 勾题号快速录入 (01-fast-entry) -->
+        <div v-if="fastEntryMode === 'tick'" class="space-y-8">
+          <!-- 3-Column Selectors & Inputs -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 border border-[#D6D6CD] bg-[#F8F7F3]">
+            <!-- 01 Exam Paper Selector -->
+            <div>
+              <label class="block text-xs font-medium text-[#777D76] mb-2 uppercase tracking-wider">01 / 选择测验卷</label>
+              <select v-model="selectedExamId" @change="loadExamQuestions"
+                      class="w-full bg-[#F8F7F3] border border-[#D6D6CD] text-sm text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B] transition">
+                <option v-for="exam in examList" :key="exam.id" :value="exam.id">
+                  {{ exam.title }}
+                </option>
+              </select>
+            </div>
+
+            <!-- 02 Current Student Selector -->
+            <div>
+              <label class="block text-xs font-medium text-[#777D76] mb-2 uppercase tracking-wider">02 / 当前录入学生</label>
+              <select v-model="currentStudentId"
+                      class="w-full bg-[#F8F7F3] border border-[#D6D6CD] text-sm text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B] transition">
+                <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
+                  {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <!-- 03 Score Input -->
+            <div>
+              <label class="block text-xs font-medium text-[#777D76] mb-2 uppercase tracking-wider">03 / 本次得分</label>
+              <div class="flex items-center space-x-2">
+                <input type="number" v-model.number="tickScore" min="0" max="100"
+                       @keydown.enter.prevent="submitBatchTick"
+                       class="w-full bg-[#F8F7F3] border border-[#D6D6CD] text-sm text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B] font-mono-num transition">
+                <span class="text-xs text-[#777D76] whitespace-nowrap">/ 100分</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Question Number Tick Grid -->
+          <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+            <div class="flex items-center justify-between mb-6 pb-2 border-b border-[#D6D6CD]">
+              <span class="text-xs font-medium text-[#23322B] uppercase tracking-wider">勾选做错的题号</span>
+              <span class="text-xs text-[#777D76]">
+                已选择 <span class="font-mono-num font-semibold text-[#B84732]">{{ String(tickedMistakes.length).padStart(2, '0') }}</span> 题 · 点击题号可取消
+              </span>
+            </div>
+
+            <!-- Numbers Grid (Padded 01, 02, ...) -->
+            <div class="grid grid-cols-5 sm:grid-cols-10 gap-3">
+              <button v-for="q in examQuestions" :key="q.id"
+                      type="button"
+                      @click="toggleTickQuestion(q)"
+                      :class="isQuestionTicked(q.id) ? 'bg-[#B84732] text-white border-[#B84732]' : 'bg-transparent text-[#23322B] border-[#D6D6CD] hover:border-[#23322B]'"
+                      class="h-12 border flex items-center justify-center font-mono-num text-sm font-medium transition duration-150 outline-none select-none">
+                {{ String(q.q_no).padStart(2, '0') }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Error Tags for Ticked Questions -->
+          <div v-if="tickedMistakes.length > 0" class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+            <div class="flex items-center justify-between mb-6 pb-2 border-b border-[#D6D6CD]">
+              <span class="text-xs font-medium text-[#23322B] uppercase tracking-wider">快速标记错因</span>
+              <span class="text-xs text-[#777D76]">错因可多选，留空也能保存</span>
+            </div>
+
+            <div class="divide-y divide-[#D6D6CD]">
+              <div v-for="tm in tickedMistakes" :key="tm.exam_question_id"
+                   class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center space-x-4">
+                  <span class="font-mono-num text-sm text-[#B84732] font-semibold w-6">{{ String(tm.q_no).padStart(2, '0') }}</span>
+                  <span class="text-xs font-medium text-[#23322B]">{{ getModuleLabel(tm.module_tag) }}</span>
+                </div>
+
+                <!-- Error Tag Selection Pills -->
+                <div class="flex flex-wrap items-center gap-2">
+                  <button v-for="tag in getQuickTags(tm.exam_question_id)" :key="tag"
+                          type="button"
+                          @click="toggleMistakeTag(tm, tag)"
+                          :class="tm.error_tags.includes(tag) ? 'bg-[#23322B] text-white border-[#23322B]' : 'bg-transparent text-[#777D76] border-[#D6D6CD] hover:border-[#23322B]'"
+                          class="px-2.5 py-1 text-xs border transition outline-none">
+                    {{ tag }}
+                  </button>
+                </div>
+
+                <div class="text-right text-xs text-[#777D76] font-mono-num">
+                  {{ tm.error_tags.length > 0 ? '已标记 ' + tm.error_tags.length + ' 项' : '未标记' }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Bar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#D6D6CD]">
+            <p class="text-xs text-[#777D76]">
+              保存后自动切换到下一位学生。Enter 保存，Tab 移动焦点。
+            </p>
+            <button @click="submitBatchTick"
+                    :disabled="isSubmitting"
+                    class="group inline-flex items-center justify-between px-8 py-3.5 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-sm font-medium transition duration-150 outline-none focus-visible:ring-1 focus-visible:ring-[#23322B] disabled:opacity-50">
+              <span>{{ isSubmitting ? '保存中...' : '保存，录入下一位' }}</span>
+              <svg class="editorial-arrow ml-3" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB B: 拍照批改与教师核对 (02-photo-ocr) -->
+        <div v-if="fastEntryMode === 'ocr'" class="space-y-8">
+          <!-- Two Action Cards (Desktop File Upload & Mobile Direct Upload) -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- 01 Desktop Upload -->
+            <div class="border border-dashed border-[#A0A59E] bg-[#F8F7F3] p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#23322B] transition"
+                 @click="triggerOcrFileInput">
+              <input type="file" id="ocrFileInput" accept="image/*" class="hidden" @change="handleOcrFileUpload">
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">01 / 上传手写作业或试卷</p>
+              <div class="font-editorial text-2xl font-normal text-[#23322B] mb-2">选择照片，开始识别</div>
+              <p class="text-xs text-[#777D76]">
+                {{ isOcrLoading ? '正在调用腾讯云识别中，请稍候...' : '支持 JPG / PNG · 上传后先核对，再入库' }}
+              </p>
+            </div>
+
+            <!-- 02 Mobile Direct Upload -->
+            <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div>
+                <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-1">02 / 手机直传</p>
+                <div class="font-editorial text-2xl font-normal text-[#23322B] mb-2">用手机拍，电脑确认</div>
+                <p class="text-xs text-[#777D76] leading-relaxed mb-4">
+                  微信扫码打开上传页，拍完后在此页刷新识别结果。
+                </p>
+                <button @click="checkMobileUpload"
+                        class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium transition outline-none">
+                  <span>刷新上传记录</span>
+                  <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                    <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                    <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Real QR Code for Mobile Upload -->
+              <div class="flex flex-col items-center">
+                <div id="qrcode" class="p-2 border border-[#D6D6CD] bg-white min-w-[104px] min-h-[104px] flex items-center justify-center"></div>
+                <span class="text-[10px] text-[#777D76] mt-1.5">扫码直接拍照</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pending OCR Results Section -->
+          <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-6 border-b border-[#D6D6CD] gap-4">
+              <div>
+                <h2 class="font-editorial text-2xl font-normal text-[#23322B]">待核对的识别结果</h2>
+                <p class="text-xs text-[#777D76] mt-0.5">识别结果由 AI 判定，请老师快速复核并选择入库错题</p>
+              </div>
+
+              <!-- Assign Student Dropdown -->
+              <div class="flex items-center space-x-2">
+                <span class="text-xs text-[#777D76] whitespace-nowrap">指定归属学生:</span>
+                <select v-model="ocrStudentId"
+                        class="bg-[#F8F7F3] border border-[#D6D6CD] text-xs text-[#23322B] py-1.5 px-2 outline-none focus:border-[#23322B]">
+                  <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
+                    {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- OCR Results List -->
+            <div v-if="ocrParsedResults.length > 0" class="divide-y divide-[#D6D6CD]">
+              <div v-for="(item, idx) in ocrParsedResults" :key="idx"
+                   class="py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-start space-x-4">
+                  <!-- Checkbox -->
+                  <input type="checkbox" v-model="item.is_wrong"
+                         class="mt-1 h-4 w-4 border-[#D6D6CD] text-[#B84732] focus:ring-0 cursor-pointer">
+                  
+                  <div>
+                    <div class="flex items-center space-x-3 mb-1">
+                      <span class="font-mono-num text-xs font-semibold text-[#23322B]">第 {{ String(idx + 1).padStart(2, '0') }} 题</span>
+                      <span :class="item.is_wrong ? 'text-[#B84732] border-[#B84732]' : 'text-[#23322B] border-[#D6D6CD]'"
+                            class="text-[11px] px-1.5 py-0.5 border font-medium">
+                        {{ item.is_wrong ? '判定为错' : '判定为对' }}
+                      </span>
+                      <span class="text-xs text-[#777D76]">{{ getModuleLabel(item.module_tag) }}</span>
+                    </div>
+
+                    <!-- Question Text / Formula -->
+                    <p class="text-xs text-[#23322B] font-mono leading-relaxed">{{ item.question_text }}</p>
+                    <p v-if="item.student_answer" class="text-xs text-[#777D76] mt-0.5">
+                      学生作答: <span class="font-mono">{{ item.student_answer }}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-4 self-end md:self-auto">
+                  <button v-if="item.crop_url" @click="viewOriginalImage(item.crop_url)"
+                          class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium outline-none">
+                    <span>查看原图</span>
+                    <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                      <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                      <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Empty OCR Results State -->
+            <div v-else class="py-12 text-center text-xs text-[#777D76]">
+              <p class="text-sm font-medium text-[#23322B] mb-1">暂无待核对的拍照记录</p>
+              <p>请点击上方上传作业照片，或用手机扫码拍照后点击“刷新上传记录”。</p>
+            </div>
+
+            <!-- Confirm Insertion Action Bar -->
+            <div v-if="ocrParsedResults.length > 0" class="pt-6 mt-6 border-t border-[#D6D6CD] flex items-center justify-between">
+              <span class="text-xs text-[#777D76]">
+                已选定 <span class="font-mono-num font-semibold text-[#B84732]">{{ getOcrWrongCount() }}</span> 道错题，准备入库
+              </span>
+              <button @click="submitOcrConfirm"
+                      :disabled="isSubmitting || getOcrWrongCount() === 0"
+                      class="group inline-flex items-center justify-between px-8 py-3 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-xs font-medium transition duration-150 outline-none focus-visible:ring-1 focus-visible:ring-[#23322B] disabled:opacity-50">
+                <span>{{ isSubmitting ? '入库中...' : '确认 ' + getOcrWrongCount() + ' 道错题入库' }}</span>
+                <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                  <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                  <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================== -->
+      <!-- VIEW 03: 学情档案 (Student Tracking) -->
+      <!-- ===================================================================== -->
+      <section v-if="currentNav === 'students'" class="space-y-8">
+        <!-- Top Subheader -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#D6D6CD] pb-4 gap-4">
+          <div>
+            <p class="text-xs text-[#777D76] tracking-wider uppercase mb-1">学生 / 单生追踪</p>
+            <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">学情档案</h1>
+          </div>
+          <div class="flex items-center space-x-4">
+            <!-- Student Select -->
+            <select v-model="trackingStudentId" @change="loadStudentDetail"
+                    class="bg-[#F8F7F3] border border-[#D6D6CD] text-sm text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B] transition">
+              <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
+                {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }} · {{ stu.class_name || '六(1)班' }}
+              </option>
+            </select>
+
+            <!-- Generate Parent Weekly Report Button -->
+            <button @click="generateWechatReport"
+                    class="group inline-flex items-center px-4 py-2 border border-[#23322B] hover:bg-[#23322B] hover:text-white text-[#23322B] text-xs font-medium transition duration-150 outline-none">
+              <span>生成家长周报</span>
+              <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3 Stats Columns -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+            <p class="text-xs text-[#777D76] mb-1">基线分</p>
+            <div class="font-editorial text-3xl sm:text-4xl text-[#23322B] font-mono-num mb-1">
+              {{ studentDetail?.student?.baseline_score || 50 }}分
+            </div>
+            <p class="text-xs text-[#777D76]">首次纳入临界生计划</p>
+          </div>
+
+          <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+            <p class="text-xs text-[#777D76] mb-1">当前估分</p>
+            <div class="font-editorial text-3xl sm:text-4xl text-[#B84732] font-mono-num mb-1">
+              {{ studentDetail?.student?.current_est_score || 50 }}分
+            </div>
+            <p class="text-xs text-[#777D76]">
+              {{ calcScoreDiffText() }}
+            </p>
+          </div>
+
+          <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+            <p class="text-xs text-[#777D76] mb-1">仍需巩固</p>
+            <div class="font-editorial text-3xl sm:text-4xl text-[#23322B] font-mono-num mb-1">
+              {{ String(getUnmasteredCount()).padStart(2, '0') }} 个考点
+            </div>
+            <p class="text-xs text-[#777D76]">以最近一次录错与验收为依据</p>
+          </div>
+        </div>
+
+        <!-- Split Layout: Left Scores & Notes, Right Active Mistakes -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left Column (5 Cols) -->
+          <div class="lg:col-span-5 space-y-8">
+            <!-- Recent Exam Scores -->
+            <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+              <h2 class="font-editorial text-xl font-normal text-[#23322B] mb-4 pb-2 border-b border-[#D6D6CD]">最近得分</h2>
+              <div v-if="studentDetail?.recent_scores && studentDetail.recent_scores.length > 0" class="divide-y divide-[#D6D6CD]">
+                <div v-for="(sc, idx) in studentDetail.recent_scores" :key="idx" class="py-3 flex items-center justify-between text-xs">
+                  <div class="flex items-center space-x-3">
+                    <span class="font-mono-num text-[#777D76]">{{ sc.recorded_at ? sc.recorded_at.slice(5, 10) : '' }}</span>
+                    <span class="font-medium text-[#23322B]">{{ sc.title }}</span>
+                  </div>
+                  <span class="font-mono-num font-semibold text-[#23322B]">{{ sc.score }}分</span>
+                </div>
+              </div>
+              <div v-else class="py-4 text-xs text-[#777D76]">暂无历史测验得分</div>
+              <p class="text-[11px] text-[#777D76] mt-4 pt-2 border-t border-[#D6D6CD]">
+                估分由测验成绩计算，实际考试成绩可能不同。
+              </p>
+            </div>
+
+            <!-- Teacher Notes -->
+            <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+              <div class="flex items-center justify-between mb-3 pb-2 border-b border-[#D6D6CD]">
+                <h2 class="font-editorial text-xl font-normal text-[#23322B]">教师学情备注</h2>
+                <button @click="saveStudentSummary"
+                        class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium outline-none">
+                  <span>保存备注</span>
+                  <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                    <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                    <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <textarea v-if="studentDetail?.student"
+                        v-model="studentDetail.student.l3_summary_override"
+                        rows="4"
+                        placeholder="记录针对该生的面批策略，如：引导说清‘谁是单位1’、检查分配律展开是否漏乘..."
+                        class="w-full bg-[#F8F7F3] border border-[#D6D6CD] text-xs text-[#23322B] p-3 outline-none focus:border-[#23322B] leading-relaxed resize-none"></textarea>
+            </div>
+          </div>
+
+          <!-- Right Column: Current Mistakes & Resolved List (7 Cols) -->
+          <div class="lg:col-span-7 border border-[#D6D6CD] bg-[#F8F7F3] p-6">
+            <h2 class="font-editorial text-xl font-normal text-[#23322B] mb-4 pb-2 border-b border-[#D6D6CD]">当前要解决</h2>
+
+            <div v-if="studentDetail?.mistakes && studentDetail.mistakes.length > 0" class="divide-y divide-[#D6D6CD]">
+              <div v-for="(m, idx) in studentDetail.mistakes" :key="m.id"
+                   class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start space-x-3">
+                  <span v-if="m.mastery_status !== 'passed'"
+                        class="font-mono-num text-sm text-[#B84732] font-semibold w-6">{{ String(idx + 1).padStart(2, '0') }}</span>
+                  <span v-else class="text-xs text-[#777D76] font-bold w-6">✓</span>
+
+                  <div>
+                    <div class="text-xs font-medium text-[#23322B]">
+                      {{ m.error_summary || (m.error_tags && m.error_tags.length > 0 ? m.error_tags.join(' / ') : '基础薄弱题') }}
+                    </div>
+                    <div class="text-xs text-[#777D76] mt-0.5">
+                      <span>{{ getModuleLabel(m.module_tag) }}</span>
+                      <span class="mx-1 text-[#D6D6CD]">·</span>
+                      <span v-if="m.mastery_status !== 'passed'">已连续错 {{ m.wrong_count }} 次</span>
+                      <span v-else>已过关消项</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-3 self-end sm:self-auto text-xs">
+                  <button v-if="m.question_snapshot || m.photo_url"
+                          @click="viewMistakeDetail(m)"
+                          class="group inline-flex items-center text-[#777D76] hover:text-[#23322B] outline-none">
+                    <span>看原题</span>
+                    <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                      <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                      <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+
+                  <button v-if="m.mastery_status !== 'passed'"
+                          @click="markMistakePassed(m.id)"
+                          class="px-2.5 py-1 border border-[#D6D6CD] hover:border-[#23322B] text-[#23322B] font-medium transition outline-none">
+                    一键过关
+                  </button>
+                  <span v-else class="text-[#777D76]">已消项</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="py-12 text-center text-xs text-[#777D76]">
+              该学生暂无录入的错题。
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================== -->
+      <!-- VIEW 04: 巩固单 (Consolidation Sheets) -->
+      <!-- ===================================================================== -->
+      <section v-if="currentNav === 'sheets'" class="space-y-8">
+        <!-- Top Subheader -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#D6D6CD] pb-4 gap-4">
+          <div>
+            <p class="text-xs text-[#777D76] tracking-wider uppercase mb-1">练习 / 打印与验收</p>
+            <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">巩固单</h1>
+          </div>
+          <div class="flex items-center space-x-4">
+            <span class="text-xs text-[#777D76] hidden sm:inline">一人一页 A4 · 末页教师答案</span>
+            <button @click="openNewSheetModal"
+                    class="group inline-flex items-center px-5 py-2.5 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-xs font-medium transition duration-150 outline-none">
+              <span>新建巩固单</span>
+              <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Pending Count Stat -->
+        <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+          <div class="font-editorial text-5xl sm:text-6xl text-[#B84732] font-mono-num leading-none mb-2">
+            {{ String(pendingSheetsCount).padStart(2, '0') }} <span class="text-2xl text-[#23322B]">份待验收</span>
+          </div>
+          <p class="text-xs text-[#777D76]">完成验收后，再安排下一轮巩固。</p>
+        </div>
+
+        <!-- Current Active Batch Section -->
+        <div class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+          <div class="flex items-center justify-between mb-6 pb-2 border-b border-[#D6D6CD]">
+            <div>
+              <h2 class="font-editorial text-2xl font-normal text-[#23322B]">
+                本周巩固单
+              </h2>
+              <p class="text-xs text-[#777D76] mt-0.5">
+                {{ latestBatch ? (latestBatch.batch_code || '近期批次') + ' 生成 · 六(1)班' : '暂无最新生成批次' }}
+              </p>
+            </div>
+
+            <button v-if="latestBatch?.pdf_path" @click="downloadPdf(latestBatch.pdf_path)"
+                    class="group inline-flex items-center text-xs text-[#23322B] hover:text-[#B84732] font-medium outline-none">
+              <span>下载合并 PDF</span>
+              <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div v-if="latestBatchSheets.length > 0" class="divide-y divide-[#D6D6CD]">
+            <div v-for="sheet in latestBatchSheets" :key="sheet.id"
+                 class="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div class="flex items-center space-x-6">
+                <div>
+                  <span class="font-medium text-sm text-[#23322B]">{{ sheet.student_name }}</span>
+                  <span class="text-xs text-[#777D76] ml-2">{{ sheet.student_no ? sheet.student_no + '号' : '' }}</span>
+                </div>
+                <div class="text-xs text-[#23322B]">
+                  {{ getStudentWeakness(sheet.student_id) }}
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-6 text-xs">
+                <span :class="sheet.status === 'checked' ? 'text-[#777D76]' : 'text-[#B84732] font-medium'">
+                  {{ sheet.status === 'checked' ? '已验收' : '待周一验收' }}
+                </span>
+                <span class="text-[#777D76]">8 题 · A4 一页</span>
+                <button @click="openMondayCheckModal(sheet.id)"
+                        class="group inline-flex items-center px-4 py-2 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-xs font-medium transition duration-150 outline-none">
+                  <span>{{ sheet.status === 'checked' ? '重新核对' : '开始验收' }}</span>
+                  <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                    <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                    <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="py-12 text-center text-xs text-[#777D76]">
+            暂无本周生成的巩固单，请点击右上角“新建巩固单”。
+          </div>
+        </div>
+
+        <!-- Historical Batches Section -->
+        <div v-if="historicalBatches.length > 0" class="border border-[#D6D6CD] bg-[#F8F7F3] p-8">
+          <h2 class="font-editorial text-2xl font-normal text-[#23322B] mb-4 pb-2 border-b border-[#D6D6CD]">历史批次</h2>
+          <div class="divide-y divide-[#D6D6CD]">
+            <div v-for="b in historicalBatches" :key="b.batch_code"
+                 class="py-4 flex items-center justify-between text-xs">
+              <div class="flex items-center space-x-6">
+                <span class="font-medium text-[#23322B]">{{ b.batch_code }} 批次</span>
+                <span class="text-[#777D76]">{{ b.count }} 位学生 · {{ b.is_all_checked ? '已全部验收' : '待验收' }}</span>
+              </div>
+              <button v-if="b.pdf_path" @click="downloadPdf(b.pdf_path)"
+                      class="group inline-flex items-center text-[#23322B] hover:text-[#B84732] font-medium outline-none">
+                <span>下载 PDF</span>
+                <svg class="editorial-arrow ml-1" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                  <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                  <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================================================================== -->
+      <!-- VIEW 06: 母题库 (Mother Question Library) -->
+      <!-- ===================================================================== -->
+      <section v-if="currentNav === 'kb'" class="space-y-8">
+        <!-- Top Subheader -->
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between border-b border-[#D6D6CD] pb-4 gap-4">
+          <div>
+            <p class="text-xs text-[#777D76] tracking-wider uppercase mb-1">资源 / 基础母题</p>
+            <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">母题库</h1>
+          </div>
+          <div class="text-xs text-[#777D76]">
+            4 类核心考点 · 教师面批可直接使用
+          </div>
+        </div>
+
+        <!-- Filter Tabs & Search Bar -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 border border-[#D6D6CD] bg-[#F8F7F3]">
+          <!-- Category Filter Tabs -->
+          <div class="flex flex-wrap items-center gap-2">
+            <button v-for="f in kbModuleFilters" :key="f.key"
+                    @click="selectedKbModule = f.key"
+                    :class="selectedKbModule === f.key ? 'bg-[#23322B] text-white' : 'bg-transparent text-[#777D76] hover:text-[#23322B]'"
+                    class="px-3 py-1.5 text-xs font-medium transition outline-none">
+              {{ f.label }}
+            </button>
+          </div>
+
+          <!-- Search Input -->
+          <div class="w-full md:w-72">
+            <input type="text" v-model="kbSearchQuery"
+                   placeholder="搜索母题、考点或标签..."
+                   class="w-full bg-[#F8F7F3] border border-[#D6D6CD] text-xs text-[#23322B] py-1.5 px-3 outline-none focus:border-[#23322B] transition">
+          </div>
+        </div>
+
+        <!-- Split Layout: Left List (1/3), Right Detail (2/3) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          <!-- Left Column: Mother Question List -->
+          <div class="lg:col-span-4 border border-[#D6D6CD] bg-[#F8F7F3] divide-y divide-[#D6D6CD] max-h-[700px] overflow-y-auto">
+            <div v-for="mq in filteredMotherQuestions" :key="mq.id"
+                 @click="selectedMotherId = mq.id"
+                 :class="selectedMotherId === mq.id ? 'bg-[#F1EFEA] border-l-4 border-l-[#B84732]' : 'hover:bg-[#F1EFEA] border-l-4 border-l-transparent'"
+                 class="p-4 cursor-pointer transition select-none">
+              <p class="font-mono-num text-[11px] text-[#777D76] uppercase tracking-wider mb-1">
+                {{ mq.id }} / {{ getModuleLabel(mq.module_tag) }}
+              </p>
+              <h3 class="font-editorial text-base font-normal text-[#23322B]">
+                {{ mq.title }}
+              </h3>
+            </div>
+
+            <div v-if="filteredMotherQuestions.length === 0" class="p-8 text-center text-xs text-[#777D76]">
+              未检索到符合条件的母题
+            </div>
+          </div>
+
+          <!-- Right Column: Mother Question 4-Section Detail -->
+          <div v-if="currentSelectedMother" class="lg:col-span-8 border border-[#D6D6CD] bg-[#F8F7F3] p-8 space-y-8">
+            <!-- Header -->
+            <div class="border-b border-[#D6D6CD] pb-4">
+              <p class="font-mono-num text-xs text-[#777D76] uppercase tracking-wider mb-1">
+                母题 / {{ currentSelectedMother.id }}
+              </p>
+              <h2 class="font-editorial text-2xl sm:text-3xl font-normal text-[#23322B] mb-2">
+                {{ currentSelectedMother.title }}
+              </h2>
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                <span v-for="t in currentSelectedMother.tags" :key="t"
+                      class="text-[11px] px-2 py-0.5 bg-[#EDEBE4] text-[#23322B]">
+                  {{ t }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 01 Standard Mother Question -->
+            <div>
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">01 / 标准母题</p>
+              <div class="text-xs leading-relaxed text-[#23322B] bg-[#F1EFEA] p-4 border border-[#D6D6CD] font-mono whitespace-pre-wrap">
+                {{ getSectionContent(currentSelectedMother, '1. 标准母题') }}
+              </div>
+            </div>
+
+            <!-- 02 Teacher 1-on-1 Prompts -->
+            <div>
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">02 / 面批时怎么问</p>
+              <div class="text-xs leading-relaxed text-[#23322B] bg-[#F1EFEA] p-4 border border-[#D6D6CD] whitespace-pre-wrap">
+                {{ getSectionContent(currentSelectedMother, '2. 3分钟面批反问话术') }}
+              </div>
+            </div>
+
+            <!-- 03 Common Student Errors & Rubrics -->
+            <div>
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">03 / 易错提醒</p>
+              <div class="text-xs leading-relaxed text-[#23322B] bg-[#F1EFEA] p-4 border border-[#D6D6CD] whitespace-pre-wrap">
+                {{ getSectionContent(currentSelectedMother, '4. 临界生典型错因') || getSectionContent(currentSelectedMother, '3. 小学算术规范步骤与扣分红线') }}
+              </div>
+            </div>
+
+            <!-- 04 Variant Problems -->
+            <div>
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">04 / 同源变式</p>
+              <div class="text-xs leading-relaxed text-[#23322B] bg-[#F1EFEA] p-4 border border-[#D6D6CD] font-mono whitespace-pre-wrap">
+                {{ getSectionContent(currentSelectedMother, '5. 2道同源保底变式') }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ===================================================================== -->
+    <!-- COMPONENT 05: 周一验收抽屉 (Monday Check Drawer) -->
+    <!-- ===================================================================== -->
+    <div v-if="showMondayModal" class="fixed inset-0 z-50 overflow-hidden">
+      <!-- Dim Backdrop -->
+      <div class="absolute inset-0 bg-[#23322B]/20 backdrop-blur-[1px] transition-opacity"
+           @click="showMondayModal = false"></div>
+
+      <!-- Slide-in Right Panel -->
+      <div class="fixed inset-y-0 right-0 max-w-xl w-full bg-[#F8F7F3] border-l border-[#D6D6CD] shadow-none flex flex-col justify-between overflow-y-auto p-8 sm:p-10">
+        <!-- Top Area -->
+        <div>
+          <!-- Header -->
+          <div class="flex items-start justify-between border-b border-[#D6D6CD] pb-4 mb-6">
+            <div>
+              <p class="font-mono-num text-xs text-[#777D76] tracking-wider uppercase mb-1">
+                周一验收 / {{ currentSheetDetail?.student_name }} {{ currentSheetDetail?.student_no ? currentSheetDetail?.student_no + '号' : '' }}
+              </p>
+              <h2 class="font-editorial text-3xl font-normal text-[#23322B]">逐题核对</h2>
+              <p class="text-xs text-[#777D76] mt-1 leading-relaxed">
+                扫一眼作答，取消仍未过关的题。结果提交后会更新错题状态。
+              </p>
+            </div>
+            <button @click="showMondayModal = false"
+                    class="text-[#777D76] hover:text-[#23322B] text-2xl font-light leading-none p-1 outline-none">
+              &times;
+            </button>
+          </div>
+
+          <!-- 8 Questions List -->
+          <div class="space-y-3">
+            <div v-for="(item, idx) in currentSheetDetail?.items" :key="item.id"
+                 @click="toggleMondayCheck(item.id)"
+                 :class="mondayCheckStates[item.id] ? 'border-[#D6D6CD] bg-[#F8F7F3]' : 'border-[#B84732] bg-[#FAF3F1]'"
+                 class="border px-4 py-3 flex items-center justify-between cursor-pointer transition select-none">
+              <div class="flex items-center space-x-3.5 pr-2">
+                <span class="font-mono-num text-xs text-[#777D76] font-medium w-5">
+                  {{ String(item.sort_order || (idx + 1)).padStart(2, '0') }}
+                </span>
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-[11px] px-1.5 py-0.5 bg-[#EDEBE4] text-[#23322B] font-medium">
+                      {{ getItemTypeLabel(item.item_type) }}
+                    </span>
+                    <span class="text-xs font-medium text-[#23322B] line-clamp-1">
+                      {{ getItemTitle(item) }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- State Toggle -->
+              <div class="whitespace-nowrap">
+                <span v-if="mondayCheckStates[item.id]"
+                      class="inline-flex items-center text-xs text-[#23322B] font-medium px-2.5 py-1 border border-[#D6D6CD] bg-[#F8F7F3]">
+                  ✓ 已过关
+                </span>
+                <span v-else
+                      class="inline-flex items-center text-xs text-[#B84732] font-semibold px-2.5 py-1 border border-[#B84732] bg-white">
+                  需继续
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Area -->
+        <div class="pt-6 mt-8 border-t border-[#D6D6CD] space-y-4">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-[#777D76]">本次核对</span>
+            <span class="font-mono-num text-[#23322B] font-medium">
+              <span class="text-[#23322B] font-bold">{{ String(mondayPassedCount).padStart(2, '0') }}</span> 已过关 / 
+              <span class="text-[#B84732] font-bold">{{ String(mondayFailedCount).padStart(2, '0') }}</span> 需继续
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between gap-4">
+            <span class="text-[11px] text-[#777D76]">提交后可在学生档案查看结果。</span>
+            <button @click="submitMondayCheck"
+                    :disabled="isSubmitting"
+                    class="group inline-flex items-center justify-between px-6 py-3 bg-[#23322B] hover:bg-[#18231E] active:bg-[#121B17] text-white text-xs font-medium transition duration-150 outline-none focus-visible:ring-1 focus-visible:ring-[#23322B] disabled:opacity-50">
+              <span>{{ isSubmitting ? '提交中...' : '提交验收结果' }}</span>
+              <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+                <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+                <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: 生成家长周报 (Parent Report Modal) -->
+    <!-- ===================================================================== -->
+    <div v-if="showWechatModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="fixed inset-0 bg-[#23322B]/20 backdrop-blur-[1px]" @click="showWechatModal = false"></div>
+      <div class="bg-[#F8F7F3] border border-[#D6D6CD] max-w-lg w-full p-8 relative z-10 space-y-4">
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-3">
+          <h3 class="font-editorial text-2xl font-normal text-[#23322B]">家长周报 · 微信话术</h3>
+          <button @click="showWechatModal = false" class="text-2xl text-[#777D76] hover:text-[#23322B] leading-none">&times;</button>
+        </div>
+        <p class="text-xs text-[#777D76]">自动汇总该生本周错题消项与巩固进展，复制后可直接私信家长：</p>
+        <div class="bg-white border border-[#D6D6CD] p-4 text-xs font-mono text-[#23322B] whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+          {{ wechatData.wechat_msg }}
+        </div>
+        <div class="flex items-center justify-end space-x-3 pt-2">
+          <button @click="showWechatModal = false" class="px-4 py-2 border border-[#D6D6CD] text-xs text-[#777D76]">关闭</button>
+          <button @click="copyWechatMsg"
+                  class="group inline-flex items-center px-5 py-2 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium transition">
+            <span>复制话术</span>
+            <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+              <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+              <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: 新建巩固单 (New Batch Modal) -->
+    <!-- ===================================================================== -->
+    <div v-if="showNewSheetModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="fixed inset-0 bg-[#23322B]/20 backdrop-blur-[1px]" @click="showNewSheetModal = false"></div>
+      <div class="bg-[#F8F7F3] border border-[#D6D6CD] max-w-lg w-full p-8 relative z-10 space-y-6">
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-3">
+          <h3 class="font-editorial text-2xl font-normal text-[#23322B]">新建巩固单批次</h3>
+          <button @click="showNewSheetModal = false" class="text-2xl text-[#777D76] hover:text-[#23322B] leading-none">&times;</button>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-[#777D76] mb-2 uppercase tracking-wider">批次标题</label>
+          <input type="text" v-model="newBatchTitle"
+                 class="w-full bg-white border border-[#D6D6CD] text-xs text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B]">
+        </div>
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-medium text-[#777D76] uppercase tracking-wider">选择出卷学生</label>
+            <button @click="toggleSelectAll" class="text-xs text-[#B84732] hover:underline">
+              {{ isAllSelected ? '取消全选' : '全选全部' }}
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 border border-[#D6D6CD] bg-white p-3 max-h-48 overflow-y-auto">
+            <label v-for="stu in overviewData.students" :key="stu.id"
+                   class="flex items-center space-x-2 text-xs text-[#23322B] cursor-pointer p-1 hover:bg-[#F1EFEA]">
+              <input type="checkbox" :value="stu.id" v-model="selectedStudentIds"
+                     class="h-3.5 w-3.5 text-[#B84732] border-[#D6D6CD] focus:ring-0">
+              <span>{{ stu.name }} ({{ stu.student_no ? stu.student_no + '号' : '' }})</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex items-center justify-end space-x-3 pt-2 border-t border-[#D6D6CD]">
+          <button @click="showNewSheetModal = false" class="px-4 py-2 border border-[#D6D6CD] text-xs text-[#777D76]">取消</button>
+          <button @click="submitGenerateSheets"
+                  :disabled="isSubmitting || selectedStudentIds.length === 0"
+                  class="group inline-flex items-center px-5 py-2.5 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium transition disabled:opacity-50">
+            <span>{{ isSubmitting ? '正在出卷中...' : '生成巩固单 (' + selectedStudentIds.length + '人)' }}</span>
+            <svg class="editorial-arrow ml-2" viewBox="0 0 42 30" fill="none" aria-hidden="true">
+              <circle cx="5" cy="25" r="1.8" fill="#B84732"/>
+              <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: 查看原图/原题 (View Original Image Modal) -->
+    <!-- ===================================================================== -->
+    <div v-if="previewImageUrl" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="fixed inset-0 bg-[#23322B]/30 backdrop-blur-[1px]" @click="previewImageUrl = null"></div>
+      <div class="bg-[#F8F7F3] border border-[#D6D6CD] max-w-2xl w-full p-6 relative z-10 space-y-4">
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-2">
+          <span class="text-xs font-medium text-[#777D76]">作答原图核对</span>
+          <button @click="previewImageUrl = null" class="text-2xl text-[#777D76] hover:text-[#23322B] leading-none">&times;</button>
+        </div>
+        <div class="max-h-[70vh] overflow-auto flex items-center justify-center bg-white p-2 border border-[#D6D6CD]">
+          <img :src="previewImageUrl" alt="原图预览" class="max-w-full h-auto object-contain">
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="w-full border-t border-[#D6D6CD] bg-[#F8F7F3] px-6 sm:px-12 py-5 text-xs text-[#777D76] mt-auto">
+      <div class="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+        <span>六年级数学 · 临界生基础巩固计划</span>
+        <span class="flex items-center">
+          <span class="w-1.5 h-1.5 rounded-full bg-[#B84732] mr-2"></span>
+          <span>轻量微内核 · 真实学情数据</span>
+        </span>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

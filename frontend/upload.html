@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>手机拍照直传 · 六年级数学</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #F8F7F3;
+      color: #23322B;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+    .font-editorial {
+      font-family: "Songti SC", "SimSun", "STSong", "Noto Serif CJK SC", Georgia, serif;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-[#B84732] selection:text-white">
+
+  <!-- Content Container (390px mobile layout) -->
+  <div class="w-full max-w-[390px] mx-auto px-6 py-6 flex-1 flex flex-col justify-between">
+    
+    <!-- Top Area -->
+    <div>
+      <!-- Brand Logo -->
+      <div class="flex items-center mb-6">
+        <div class="w-[3px] h-4 bg-[#B84732] mr-2.5"></div>
+        <span class="font-editorial font-bold text-base text-[#23322B] tracking-tight">六年级数学</span>
+      </div>
+
+      <!-- Section Subhead & Big Heading -->
+      <p class="text-[11px] text-[#777D76] tracking-wider uppercase mb-2">错题采集 / 手机直传</p>
+      <h1 class="font-editorial text-[28px] leading-[1.3] font-normal text-[#23322B] mb-3">
+        拍一张，<br>
+        把错题交给老师。
+      </h1>
+      <p class="text-xs text-[#777D76] leading-relaxed">
+        请拍清楚题目和解题过程。上传后，老师会在电脑端核对识别结果。
+      </p>
+
+      <!-- Dashed Upload Zone -->
+      <div id="dropZone" class="border border-dashed border-[#A0A59E] my-6 p-6 flex flex-col items-center justify-center text-center min-h-[220px] bg-[#F8F7F3]">
+        <div id="emptyPrompt">
+          <div class="text-4xl text-[#B84732] font-light mb-2 leading-none">+</div>
+          <p class="text-sm font-medium text-[#23322B] mb-1">还没有选择照片</p>
+          <p class="text-xs text-[#777D76]">拍摄作业或从相册选择</p>
+        </div>
+        <div id="previewPrompt" class="hidden w-full">
+          <img id="previewImg" class="max-h-48 mx-auto object-contain border border-[#D6D6CD]" alt="预览">
+          <p id="fileName" class="text-xs text-[#777D76] mt-2 truncate"></p>
+        </div>
+      </div>
+
+      <!-- Hidden File Inputs -->
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handleFileChange(event)">
+      <input type="file" id="albumInput" accept="image/*" class="hidden" onchange="handleFileChange(event)">
+
+      <!-- Two Buttons Grid -->
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <button type="button" onclick="triggerCamera()"
+                class="w-full py-3 bg-[#23322B] active:bg-[#121B17] text-white text-xs font-medium transition text-center">
+          直接拍照
+        </button>
+        <button type="button" onclick="triggerAlbum()"
+                class="w-full py-3 bg-white active:bg-slate-50 border border-[#23322B] text-[#23322B] text-xs font-medium transition text-center">
+          从相册选择
+        </button>
+      </div>
+
+      <!-- Status Notice -->
+      <div id="statusNotice" class="hidden p-3 border text-xs leading-relaxed my-3"></div>
+    </div>
+
+    <!-- Bottom Notice & Footer -->
+    <div class="mt-8 pt-4 border-t border-[#D6D6CD]">
+      <p class="text-[11px] text-[#777D76] leading-relaxed mb-4">
+        照片仅用于本次错题识别。上传成功后，请回到教师工作台确认入库。
+      </p>
+      <div class="flex items-center justify-between text-[11px] text-[#A0A59E]">
+        <span>六年级数学 · 手机上传页</span>
+        <span>轻量极简版</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let selectedFile = null;
+
+    function triggerCamera() {
+      document.getElementById('cameraInput').click();
+    }
+
+    function triggerAlbum() {
+      document.getElementById('albumInput').click();
+    }
+
+    function handleFileChange(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      selectedFile = file;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        document.getElementById('previewImg').src = evt.target.result;
+        document.getElementById('fileName').innerText = file.name;
+        document.getElementById('emptyPrompt').classList.add('hidden');
+        document.getElementById('previewPrompt').classList.remove('hidden');
+
+        // Automatically upload right after selection
+        uploadFile(file);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function uploadFile(file) {
+      const notice = document.getElementById('statusNotice');
+      notice.className = 'p-3 border border-[#D6D6CD] bg-white text-xs text-[#23322B] my-3 block';
+      notice.innerText = '正在智能压缩并上传试卷照片...';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const resp = await fetch('/api/ocr/mobile-upload', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          notice.className = 'p-3 border border-[#23322B] bg-white text-xs text-[#23322B] my-3 block font-medium';
+          notice.innerText = `上传成功！已解析 ${data.item_count} 道题目，请在电脑端“拍照批改”页刷新确认。`;
+        } else {
+          notice.className = 'p-3 border border-[#B84732] bg-white text-xs text-[#B84732] my-3 block';
+          notice.innerText = '上传失败：' + (data.detail || '服务错误');
+        }
+      } catch (err) {
+        notice.className = 'p-3 border border-[#B84732] bg-white text-xs text-[#B84732] my-3 block';
+        notice.innerText = '网络连接异常，请重试';
+      }
+    }
+  </script>
+</body>
+</html>
