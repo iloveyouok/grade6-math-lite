@@ -38,6 +38,7 @@
       <p class="text-xs text-[#777D76] leading-relaxed">
         请拍清楚题目和解题过程。上传后，老师会在电脑端核对识别结果。
       </p>
+      <div id="studentBindBadge" class="hidden mt-3 px-2.5 py-1.5 border border-[#23322B] bg-white text-[11px] text-[#23322B]"></div>
 
       <!-- Dashed Upload Zone -->
       <div id="dropZone" class="border border-dashed border-[#A0A59E] my-6 p-6 flex flex-col items-center justify-center text-center min-h-[220px] bg-[#F8F7F3]">
@@ -87,6 +88,13 @@
 
   <script>
     let selectedFile = null;
+    const urlParams = new URLSearchParams(window.location.search);
+    const lockedStudentId = urlParams.get('student_id');
+    if (lockedStudentId) {
+      const badge = document.getElementById('studentBindBadge');
+      badge.innerText = '已关联学生编号 #' + lockedStudentId + '（上传后将自动归属）';
+      badge.classList.remove('hidden');
+    }
 
     function triggerCamera() {
       document.getElementById('cameraInput').click();
@@ -123,7 +131,10 @@
       formData.append('file', file);
 
       try {
-        const resp = await fetch('/api/ocr/mobile-upload', {
+        const uploadEndpoint = lockedStudentId
+          ? `/api/ocr/mobile-upload?student_id=${encodeURIComponent(lockedStudentId)}`
+          : '/api/ocr/mobile-upload';
+        const resp = await fetch(uploadEndpoint, {
           method: 'POST',
           body: formData
         });

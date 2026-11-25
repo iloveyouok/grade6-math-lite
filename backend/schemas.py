@@ -157,3 +157,86 @@ class ParentReportResponse(BaseModel):
     anonymous_code: str
     teacher_summary: str
     wechat_msg: str
+
+class StudentImportRow(BaseModel):
+    student_no: str
+    name: str
+    class_name: str = "六(1)班"
+    score: Optional[float] = None
+    notes: Optional[str] = ""
+
+class StudentImportPreviewRequest(BaseModel):
+    rows: List[StudentImportRow]
+    filter_min_score: Optional[float] = 40.0
+    filter_max_score: Optional[float] = 58.0
+    only_declined: bool = False
+    min_drop: float = 5.0
+    focus_tier: str = "critical"
+    paper_title: Optional[str] = ""
+    unit_tag: Optional[str] = ""
+    exam_date: Optional[str] = None
+
+class StudentImportCommitItem(BaseModel):
+    student_no: str
+    name: str
+    class_name: str = "六(1)班"
+    score: Optional[float] = None
+    focus_tier: str = "critical"
+    l3_summary_override: Optional[str] = ""
+    selected: bool = True
+
+class StudentImportCommitRequest(BaseModel):
+    batch_id: Optional[str] = None
+    students: List[StudentImportCommitItem]
+    paper_id: Optional[int] = None
+    paper_title: Optional[str] = ""
+    unit_tag: Optional[str] = ""
+    exam_date: Optional[str] = None
+    total_score: float = 100.0
+
+class UpdateFocusTierRequest(BaseModel):
+    focus_tier: str  # "critical" | "watchlist" | "archived"
+
+class AssignTaskStudentRequest(BaseModel):
+    student_id: int
+
+class OcrBatchConfirmTask(BaseModel):
+    task_id: int
+    student_id: int
+    items: List[OcrConfirmItem]
+
+class OcrBatchConfirmRequest(BaseModel):
+    tasks: List[OcrBatchConfirmTask]
+
+class DshStudentPlanItem(BaseModel):
+    ref: str  # anonymous_code or cand_xxx
+    student_no: str
+    class_name: str = "六(1)班"
+    score: Optional[float] = None
+    focus_tier: str = "critical"
+    recommended: bool = True
+    reason: Optional[str] = ""
+    warning: Optional[str] = ""
+
+class DshMistakePlanItem(BaseModel):
+    ref: str
+    q_no: Optional[str] = ""
+    kb_mother_id: str = "G6-CALC-01"
+    module_tag: str = "calc"
+    error_tags: List[str] = []
+    question_snapshot: str
+    face_to_face_script: Optional[str] = ""
+
+class DshImportPlanRequest(BaseModel):
+    batch_id: str
+    exam_title: Optional[str] = "测验成绩批处理导入"
+    unit_tag: Optional[str] = ""
+    exam_date: Optional[str] = None
+    total_score: float = 100.0
+    filter_rule: Optional[str] = ""
+    students_to_import: List[DshStudentPlanItem] = []
+    mistakes: List[DshMistakePlanItem] = []
+
+class DshCommitBatchRequest(BaseModel):
+    batch_id: str
+    confirmed_by_user: bool = False

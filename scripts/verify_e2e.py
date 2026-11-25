@@ -1,7 +1,9 @@
 import os
 import sys
 import io
+import json
 import time
+import zipfile
 from PIL import Image
 from pypdf import PdfReader
 from fastapi.testclient import TestClient
@@ -16,7 +18,7 @@ from backend.services.kb_retriever import retrieve_mother_questions
 
 def run_e2e_verification():
     print("=" * 70)
-    print("开始小学六年级数学‘保及格’工作台 6 大核心闭环自动化验收测试...")
+    print("开始小学六年级数学‘保及格’工作台 10 大核心与整合闭环自动化验收测试...")
     print("=" * 70)
 
     # Clean DB file for idempotent test run
@@ -261,9 +263,232 @@ def run_e2e_verification():
     conn.close()
     print("  [✓] 数据库校验：已过关题目正确消项，未过关题目 wrong_count 递增并锁定至下周！")
 
+    # -------------------------------------------------------------------------
+    # 闭环 7: 动态筛选导入学生（CSV 筛选 40-58 分 + 归档切换）
+    # -------------------------------------------------------------------------
+    print("\n>>> [测试 7/10] 动态筛选导入学生（CSV 筛选 40-58 分 + 跟踪分层管理）...")
+    csv_text = "座号,姓名,班级,分数,备注\n12,周子涵,六(1)班,53,新发现临界生\n28,高飞,六(1)班,86,高分不纳入\n35,马思琪,六(1)班,46,急需巩固\n"
+    resp_parse = client.post(
+        "/api/students/import/parse-file",
+        files={"file": ("roster.csv", csv_text.encode("utf-8"), "text/csv")},
+        data={"filter_min_score": "40", "filter_max_score": "58", "paper_title": "第三单元小测"},
+    )
+    assert resp_parse.status_code == 200, f"Parse CSV failed: {resp_parse.text}"
+    parse_data = resp_parse.json()
+    assert parse_data["summary"]["recommended_count"] == 2, f"Expected 2 recommended, got {parse_data}"
+
+    resp_commit_stu = client.post(
+        "/api/students/import/commit",
+        json={
+            "batch_id": parse_data["batch_id"],
+            "paper_title": "第三单元小测",
+            "students": [
+                {
+                    "student_no": it["student_no"],
+                    "name": it["name"],
+                    "class_name": it["class_name"],
+                    "score": it["score"],
+                    "focus_tier": "critical",
+                    "selected": it["selected"],
+                }
+                for it in parse_data["items"]
+            ],
+        },
+    )
+    assert resp_commit_stu.status_code == 200, f"Commit student import failed: {resp_commit_stu.text}"
+    commit_stu_data = resp_commit_stu.json()
+    assert commit_stu_data["created_count"] == 2
+    new_stu_id = commit_stu_data["results"][0]["student_id"]
+
+    # Archive & restore tier
+    resp_arch = client.patch(f"/api/students/{new_stu_id}/tier", json={"focus_tier": "archived"})
+    assert resp_arch.status_code == 200
+    assert client.get("/api/students").json()["critical_count"] == 6
+    assert client.get("/api/students?include_archived=true").json()["critical_count"] == 7
+    client.patch(f"/api/students/{new_stu_id}/tier", json={"focus_tier": "critical"})
+    print("  [✓] 成功筛选导入 2 名新临界生（过滤掉86分高分学生），并验证 archived 移出/恢复跟踪")
+
+    # -------------------------------------------------------------------------
+    # 闭环 8: 批量导入作业（ZIP 按文件名匹配 + 未匹配人工指派 + 批量确认）
+    # -------------------------------------------------------------------------
+    print("\n>>> [测试 8/10] 批量导入作业（ZIP 含命名匹配图 + 未知图人工指派 + 批量入库）...")
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w") as zf:
+        for img_name in ["12_周子涵_1.jpg", "unknown_hw.jpg"]:
+            im = Image.new("RGB", (500, 720), color=(250, 250, 250))
+            ib = io.BytesIO()
+            im.save(ib, format="JPEG")
+            zf.writestr(img_name, ib.getvalue())
+    zip_buf.seek(0)
+
+    resp_batch_hw = client.post(
+        "/api/ocr/batch-upload",
+        files=[("files", ("homework_pack.zip", zip_buf, "application/zip"))],
+        data={"title": "周三作业批改包", "wait_for_completion": "true"},
+    )
+    assert resp_batch_hw.status_code == 200, f"Batch homework upload failed: {resp_batch_hw.text}"
+    hw_data = resp_batch_hw.json()
+    assert hw_data["summary"]["total_images"] == 2
+    assert hw_data["summary"]["matched_count"] == 1
+    assert hw_data["summary"]["unmatched_count"] == 1
+
+    hw_detail = client.get(f"/api/ocr/batches/{hw_data['batch_id']}").json()
+    unmatched_task = [t for t in hw_detail["tasks"] if t["match_status"] == "unmatched"][0]
+    assert client.patch(f"/api/ocr/tasks/{unmatched_task['id']}/assign", json={"student_id": new_stu_id}).status_code == 200
+
+    hw_detail_ready = client.get(f"/api/ocr/batches/{hw_data['batch_id']}").json()
+    batch_confirm_payload = {
+        "tasks": [
+            {
+                "task_id": t["id"],
+                "student_id": t["student_id"],
+                "items": [
+                    {
+                        "kb_mother_id": it["kb_mother_id"],
+                        "module_tag": it["module_tag"],
+                        "question_snapshot": it["question_text"],
+                        "error_tags": it["error_tags"],
+                        "photo_url": it["crop_url"],
+                        "ocr_note": it["student_answer"],
+                        "face_to_face_script": it["face_to_face_script"],
+                        "is_wrong": it["is_wrong"],
+                    }
+                    for it in t["parsed_items"]
+                ],
+            }
+            for t in hw_detail_ready["tasks"]
+        ]
+    }
+    resp_hw_confirm = client.post(f"/api/ocr/batches/{hw_data['batch_id']}/confirm", json=batch_confirm_payload)
+    assert resp_hw_confirm.status_code == 200
+    assert resp_hw_confirm.json()["inserted_count"] == 4  # 2 images * 2 wrong items each
+    print("  [✓] ZIP 批量作业导入 + 未匹配人工指派 + 4 道错题批量确认入库通过")
+
+    # -------------------------------------------------------------------------
+    # 闭环 9: DSH 桥接上传成绩单 + 腾讯 OCR + 严格脱敏检查
+    # -------------------------------------------------------------------------
+    print("\n>>> [测试 9/10] DSH 桥接上传成绩单图片 + 腾讯 OCR + 严格防真名泄露校验...")
+    grade_img = Image.new("RGB", (800, 600), color=(255, 255, 255))
+    g_buf = io.BytesIO()
+    grade_img.save(g_buf, format="JPEG")
+    g_buf.seek(0)
+
+    mcp_headers = {"Authorization": f"Bearer {settings.MCP_AUTH_TOKEN}"}
+    resp_dsh_up = client.post(
+        "/api/batches/from-dsh",
+        headers=mcp_headers,
+        files=[("files", ("grade_sheet.jpg", g_buf, "image/jpeg"))],
+        data={"batch_type": "dsh_grade_sheet", "title": "期中摸底成绩单"},
+    )
+    assert resp_dsh_up.status_code == 200, f"DSH upload failed: {resp_dsh_up.text}"
+    dsh_up_data = resp_dsh_up.json()
+    dsh_batch_id = dsh_up_data["batch_id"]
+    raw_json_str = json.dumps(dsh_up_data, ensure_ascii=False)
+    for forbidden_name in ["张伟", "李芳", "周子涵", "林小雨", "刘思远", "孙浩然"]:
+        assert forbidden_name not in raw_json_str, f"Privacy leak detected in DSH payload: {forbidden_name}"
+    assert len(dsh_up_data["desensitized_rows"]) >= 4
+    print(f"  [✓] DSH 收到 {len(dsh_up_data['desensitized_rows'])} 条脱敏成绩行，0 真实姓名泄露")
+
+    # -------------------------------------------------------------------------
+    # 闭环 10: MCP /mcp/math 鉴权 + 预览 + 禁止未确认写库 + 确认提交入库
+    # -------------------------------------------------------------------------
+    print("\n>>> [测试 10/10] MCP /mcp/math 鉴权、工具发现、先预览后确认写库闭环...")
+    assert client.post("/mcp/math", json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).status_code == 401
+    resp_tools = client.post("/mcp/math", headers=mcp_headers, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    assert resp_tools.status_code == 200
+    tool_names = [t["name"] for t in resp_tools.json()["result"]["tools"]]
+    assert "math_preview_import_plan" in tool_names and "math_commit_import_batch" in tool_names
+
+    # math_list_students must not leak real names
+    resp_mcp_stu = client.post(
+        "/mcp/math",
+        headers=mcp_headers,
+        json={"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "math_list_students", "arguments": {}}},
+    )
+    mcp_stu_text = resp_mcp_stu.json()["result"]["content"][0]["text"]
+    assert "周子涵" not in mcp_stu_text and "张伟" not in mcp_stu_text
+
+    # Submit preview plan using desensitized refs from step 9
+    cand_rows = [r for r in dsh_up_data["desensitized_rows"] if r["parsed_score"] is not None and 40 <= r["parsed_score"] <= 58]
+    resp_preview = client.post(
+        "/mcp/math",
+        headers=mcp_headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "math_preview_import_plan",
+                "arguments": {
+                    "batch_id": dsh_batch_id,
+                    "exam_title": "期中摸底测验",
+                    "filter_rule": "40 <= score <= 58",
+                    "students_to_import": [
+                        {
+                            "ref": r["ref"],
+                            "student_no": r["student_no"],
+                            "class_name": r["class_name"],
+                            "score": r["parsed_score"],
+                            "focus_tier": "critical",
+                            "recommended": True,
+                            "reason": "命中 40-58 临界区间",
+                        }
+                        for r in cand_rows
+                    ],
+                    "mistakes": [
+                        {
+                            "ref": cand_rows[0]["ref"],
+                            "q_no": "15",
+                            "kb_mother_id": "G6-GEO-01",
+                            "module_tag": "geometry",
+                            "error_tags": ["平方算成乘2"],
+                            "question_snapshot": "圆形花坛面积计算丢分",
+                        }
+                    ],
+                },
+            },
+        },
+    )
+    assert resp_preview.status_code == 200
+    assert resp_preview.json()["result"]["isError"] is False
+
+    # Ensure unconfirmed commit fails safely
+    resp_unconf = client.post(
+        "/mcp/math",
+        headers=mcp_headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {"name": "math_commit_import_batch", "arguments": {"batch_id": dsh_batch_id, "confirmed_by_user": False}},
+        },
+    )
+    assert resp_unconf.json()["result"]["isError"] is True
+
+    # Teacher web UI can see resolved real names before/at commit
+    ui_batch = client.get(f"/api/students/import/batches/{dsh_batch_id}").json()
+    assert any(st["name"] == "林小雨" for st in ui_batch["preview_plan"]["students_to_import"])
+
+    # Confirmed commit via MCP succeeds and imports 林小雨 into local DB
+    resp_conf = client.post(
+        "/mcp/math",
+        headers=mcp_headers,
+        json={
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {"name": "math_commit_import_batch", "arguments": {"batch_id": dsh_batch_id, "confirmed_by_user": True}},
+        },
+    )
+    commit_payload = json.loads(resp_conf.json()["result"]["content"][0]["text"])
+    assert commit_payload["success"] is True
+    assert commit_payload["students_created"] >= 1
+    assert commit_payload["mistakes_inserted"] == 1
+    print("  [✓] MCP 鉴权、脱敏列表、预览校验、未确认拦截、确认后真名落库全部验证通过！")
+
     print("\n" + "=" * 70)
-    print("🎉 恭喜！全部 6 大核心业务闭环测试 100% 自动化断言通过！")
-    print("系统已就绪，可在 2核2G Ubuntu 22.04 服务器上稳定部署与运行！")
+    print("🎉 恭喜！全部 10 大核心业务与 DSH 整合闭环测试 100% 自动化断言通过！")
+    print("系统已就绪，可部署至目标云服务器并接入 DSH！")
     print("=" * 70)
 
 if __name__ == "__main__":

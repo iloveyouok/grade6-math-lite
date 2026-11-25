@@ -154,3 +154,133 @@ async def _mock_tencent_ocr_result(image_path: str) -> List[Dict[str, Any]]:
         }
     ]
     return items
+
+
+async def recognize_grade_table_ocr(file_path: str, filename: str = "") -> Dict[str, Any]:
+    """
+    Extracts structured student score rows from an uploaded grade sheet (.csv/.xlsx or photo).
+    In MOCK_EXTERNAL_APIS=true, returns realistic Grade 6 test table rows (40-58 critical, high-score, and edge remarks).
+    """
+    ext = (filename or file_path).rsplit(".", 1)[-1].lower()
+    if ext in ("csv", "xlsx", "xlsm"):
+        from backend.services.desensitize import parse_roster_file
+        real_path = file_path.lstrip("/") if file_path.startswith("/data/") else file_path
+        with open(real_path, "rb") as f:
+            rows = parse_roster_file(filename or file_path, f.read())
+        return {"source": "spreadsheet", "rows": rows}
+
+    if settings.MOCK_EXTERNAL_APIS or not settings.TENCENTCLOUD_SECRET_ID or settings.TENCENTCLOUD_SECRET_ID == "mock_id":
+        await asyncio.sleep(0.15)
+        return {
+            "source": "mock_table_ocr",
+            "rows": [
+                {"student_no": "01", "name": "张伟", "class_name": "六(1)班", "score": 49, "notes": "分数计算丢分", "question_details": [{"q_no": "3", "wrong": True, "topic": "乘法分配律"}]},
+                {"student_no": "08", "name": "李芳", "class_name": "六(1)班", "score": 44, "notes": "退步明显", "question_details": [{"q_no": "11", "wrong": True, "topic": "长方形周长按比分配"}]},
+                {"student_no": "12", "name": "周子涵", "class_name": "六(1)班", "score": 53, "notes": "新进临界区间", "question_details": [{"q_no": "7", "wrong": True, "topic": "工程问题单位1"}]},
+                {"student_no": "19", "name": "林小雨", "class_name": "六(1)班", "score": 57, "notes": "圆面积平方算错", "question_details": [{"q_no": "15", "wrong": True, "topic": "圆的面积"}]},
+                {"student_no": "25", "name": "刘思远", "class_name": "六(1)班", "score": 84, "notes": "达标优秀"},
+                {"student_no": "29", "name": "孙浩然", "class_name": "六(1)班", "score": "病假", "notes": "本次缺考"}
+            ]
+        }
+
+    # Real Tencent Cloud Table Accurate OCR
+    try:
+        import base64
+        from tencentcloud.common import credential
+        from tencentcloud.common.profile.client_profile import ClientProfile
+        from tencentcloud.common.profile.http_profile import HttpProfile
+        from tencentcloud.ocr.v20181119 import ocr_client, models
+
+        cred = credential.Credential(settings.TENCENTCLOUD_SECRET_ID, settings.TENCENTCLOUD_SECRET_KEY)
+        httpProfile = HttpProfile()
+        httpProfile.endpoint = "ocr.tencentcloudapi.com"
+        clientProfile = ClientProfile()
+        clientProfile.httpProfile = httpProfile
+        client = ocr_client.OcrClient(cred, settings.TENCENTCLOUD_REGION, clientProfile)
+
+        real_path = file_path.lstrip("/") if file_path.startswith("/data/") else file_path
+        with open(real_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+
+        req = models.RecognizeTableAccurateOCRRequest()
+        req.ImageBase64 = b64
+        resp = client.RecognizeTableAccurateOCR(req)
+
+        rows: List[Dict[str, Any]] = []
+        for tbl in (getattr(resp, "TableDetections", []) or []):
+            cells = getattr(tbl, "Cells", []) or []
+            row_map: Dict[int, Dict[int, str]] = {}
+            for cell in cells:
+                r_idx = int(getattr(cell, "RowTl", 0))
+                c_idx = int(getattr(cell, "ColTl", 0))
+                txt = (getattr(cell, "Text", "") or "").strip()
+                row_map.setdefault(r_idx, {})[c_idx] = txt
+            sorted_r = [row_map[k] for k in sorted(row_map.keys())]
+            if len(sorted_r) < 2:
+                continue
+            max_cols = max(max(r.keys(), default=0) for r in sorted_r) + 1
+            header = [sorted_r[0].get(c, f"col_{c}") for c in range(max_cols)]
+            for r in sorted_r[1:]:
+                vals = [r.get(c, "") for c in range(max_cols)]
+                if any(v.strip() for v in vals):
+                    raw_obj = {header[i]: vals[i] for i in range(max_cols)}
+                    rows.append({
+                        "student_no": raw_obj.get("座号") or raw_obj.get("学号") or vals[0],
+                        "name": raw_obj.get("姓名") or (vals[1] if len(vals) > 1 else ""),
+                        "class_name": raw_obj.get("班级") or "六(1)班",
+                        "score": raw_obj.get("分数") or raw_obj.get("成绩") or raw_obj.get("总分") or (vals[2] if len(vals) > 2 else ""),
+                        "notes": raw_obj.get("备注") or "",
+                        "raw_cells": raw_obj,
+                    })
+        return {"source": "tencent_table_ocr", "rows": rows}
+    except Exception as e:
+        print(f"Tencent Table OCR failed: {e}, returning empty rows for review.")
+        return {"source": "tencent_table_ocr_error", "error": str(e), "rows": []}
+
+
+async def extract_header_identity_ocr(image_path: str) -> Dict[str, str]:
+    """
+    Reads top 18% header strip of a homework image to guess student_no / name locally.
+    """
+    if settings.MOCK_EXTERNAL_APIS or not settings.TENCENTCLOUD_SECRET_ID or settings.TENCENTCLOUD_SECRET_ID == "mock_id":
+        return {"student_no": "", "name": ""}
+
+    try:
+        import base64
+        import io
+        import re
+        from PIL import Image
+        from tencentcloud.common import credential
+        from tencentcloud.common.profile.client_profile import ClientProfile
+        from tencentcloud.common.profile.http_profile import HttpProfile
+        from tencentcloud.ocr.v20181119 import ocr_client, models
+
+        real_path = image_path.lstrip("/") if image_path.startswith("/data/") else image_path
+        img = Image.open(real_path)
+        w, h = img.size
+        crop = img.crop((0, 0, w, max(80, int(h * 0.18))))
+        buf = io.BytesIO()
+        crop.save(buf, format="JPEG", quality=80)
+        b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        cred = credential.Credential(settings.TENCENTCLOUD_SECRET_ID, settings.TENCENTCLOUD_SECRET_KEY)
+        httpProfile = HttpProfile()
+        httpProfile.endpoint = "ocr.tencentcloudapi.com"
+        clientProfile = ClientProfile()
+        clientProfile.httpProfile = httpProfile
+        client = ocr_client.OcrClient(cred, settings.TENCENTCLOUD_REGION, clientProfile)
+
+        req = models.GeneralBasicOCRRequest()
+        req.ImageBase64 = b64
+        resp = client.GeneralBasicOCR(req)
+        lines = [getattr(d, "DetectedText", "") for d in (getattr(resp, "TextDetections", []) or [])]
+        joined = " ".join(lines)
+        no_m = re.search(r"(?:学号|座号|编号)\s*[:：]?\s*(\d{1,3})", joined)
+        name_m = re.search(r"(?:姓名)\s*[:：]?\s*([\u4e00-\u9fa5]{2,4})", joined)
+        return {
+            "student_no": no_m.group(1) if no_m else "",
+            "name": name_m.group(1) if name_m else "",
+            "raw_text": joined[:200],
+        }
+    except Exception:
+        return {"student_no": "", "name": ""}

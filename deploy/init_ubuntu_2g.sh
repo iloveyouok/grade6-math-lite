@@ -60,7 +60,8 @@ fi
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
-playwright install chromium
+export PLAYWRIGHT_BROWSERS_PATH="$PROJECT_ROOT/.playwright"
+PLAYWRIGHT_DOWNLOAD_HOST="${PLAYWRIGHT_DOWNLOAD_HOST:-https://npmmirror.com/mirrors/playwright}" playwright install chromium
 
 if [ ! -f ".env" ]; then
     cp .env.example .env
@@ -71,13 +72,20 @@ echo ">>> [4/6] 预热知识库向量索引..."
 python scripts/build_kb.py
 
 echo ">>> [5/6] 配置 Systemd 守护进程..."
+SERVICE_USER="${APP_USER:-ubuntu}"
+if ! id "$SERVICE_USER" >/dev/null 2>&1; then
+    SERVICE_USER="root"
+fi
+chown -R "$SERVICE_USER:$SERVICE_USER" "$PROJECT_ROOT"
 cp deploy/grade6-math.service /etc/systemd/system/grade6-math.service
 sed -i "s|/opt/grade6-math-lite|$PROJECT_ROOT|g" /etc/systemd/system/grade6-math.service
+sed -i "s|^User=root$|User=$SERVICE_USER|" /etc/systemd/system/grade6-math.service
 systemctl daemon-reload
 systemctl enable grade6-math.service
 systemctl restart grade6-math.service
 
-echo ">>> [6/6] 配置 Nginx 反向代理与大文件上传限制 (20M)..."
+echo ">>> [6/6] 配置 Nginx 反向代理与大文件上传限制 (50M)..."
+rm -f /etc/nginx/sites-enabled/default
 cp deploy/nginx_site.conf /etc/nginx/sites-available/grade6-math.conf
 ln -sf /etc/nginx/sites-available/grade6-math.conf /etc/nginx/sites-enabled/
 nginx -t

@@ -115,6 +115,19 @@
           </div>
         </div>
 
+        <!-- Pending DSH Batch Banner -->
+        <div v-if="pendingDshBatches.length > 0"
+             class="border border-[#B84732] bg-[#FAF3F1] px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="text-xs text-[#23322B]">
+            <span class="font-semibold text-[#B84732]">DSH 批处理待确认：</span>
+            <span>有 {{ pendingDshBatches.length }} 份成绩单已完成腾讯 OCR 识别与脱敏筛选，等待你核对真名并入库。</span>
+          </div>
+          <button @click="openDshReviewFromHome(pendingDshBatches[0].id)"
+                  class="px-4 py-2 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium self-start sm:self-auto">
+            立即核对入库
+          </button>
+        </div>
+
         <!-- Pending Task Block (Split Grid: Left Big Number, Right Pending Sheets) -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <!-- Left Column: Pending Sheets Stat -->
@@ -373,14 +386,14 @@
         <div v-if="fastEntryMode === 'ocr'" class="space-y-8">
           <!-- Two Action Cards (Desktop File Upload & Mobile Direct Upload) -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <!-- 01 Desktop Upload -->
+            <!-- 01 Desktop Upload (Supports Single, Multi-Image, or ZIP) -->
             <div class="border border-dashed border-[#A0A59E] bg-[#F8F7F3] p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:border-[#23322B] transition"
                  @click="triggerOcrFileInput">
-              <input type="file" id="ocrFileInput" accept="image/*" class="hidden" @change="handleOcrFileUpload">
-              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">01 / 上传手写作业或试卷</p>
-              <div class="font-editorial text-2xl font-normal text-[#23322B] mb-2">选择照片，开始识别</div>
+              <input type="file" id="ocrFileInput" accept="image/*,.zip" multiple class="hidden" @change="handleOcrFileUpload">
+              <p class="text-xs font-medium text-[#777D76] uppercase tracking-wider mb-2">01 / 上传手写作业或批量压缩包</p>
+              <div class="font-editorial text-2xl font-normal text-[#23322B] mb-2">选择照片或 ZIP，开始识别</div>
               <p class="text-xs text-[#777D76]">
-                {{ isOcrLoading ? '正在调用腾讯云识别中，请稍候...' : '支持 JPG / PNG · 上传后先核对，再入库' }}
+                {{ isOcrLoading ? '正在压缩并调用腾讯云识别中，请稍候...' : '支持 JPG / PNG 单张、多图连传或 ZIP 打包（文件名含座号/姓名可自动关联）' }}
               </p>
             </div>
 
@@ -421,7 +434,7 @@
               <!-- Assign Student Dropdown -->
               <div class="flex items-center space-x-2">
                 <span class="text-xs text-[#777D76] whitespace-nowrap">指定归属学生:</span>
-                <select v-model="ocrStudentId"
+                <select v-model="ocrStudentId" @change="renderQrCode"
                         class="bg-[#F8F7F3] border border-[#D6D6CD] text-xs text-[#23322B] py-1.5 px-2 outline-none focus:border-[#23322B]">
                   <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
                     {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }}
@@ -492,6 +505,79 @@
               </button>
             </div>
           </div>
+
+          <!-- Batch Homework OCR Queue Panel -->
+          <div v-if="activeHomeworkBatch || homeworkBatchesList.length > 0" class="border border-[#D6D6CD] bg-[#F8F7F3] p-8 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#D6D6CD] gap-4">
+              <div>
+                <h2 class="font-editorial text-2xl font-normal text-[#23322B]">批量作业导入队列</h2>
+                <p class="text-xs text-[#777D76] mt-0.5">
+                  多图或 ZIP 上传后自动限流识图，支持为未自动匹配的文件人工指派学生
+                </p>
+              </div>
+              <div class="flex items-center space-x-3">
+                <select v-if="homeworkBatchesList.length > 0"
+                        @change="selectHomeworkBatch($event.target.value)"
+                        :value="activeHomeworkBatch?.id || ''"
+                        class="bg-white border border-[#D6D6CD] text-xs text-[#23322B] py-1.5 px-2 outline-none">
+                  <option v-for="hb in homeworkBatchesList" :key="hb.id" :value="hb.id">
+                    {{ hb.title }} ({{ hb.status }})
+                  </option>
+                </select>
+                <button v-if="activeHomeworkBatch" @click="selectHomeworkBatch(activeHomeworkBatch.id)"
+                        class="px-3 py-1.5 border border-[#D6D6CD] hover:border-[#23322B] text-xs text-[#23322B]">
+                  刷新进度
+                </button>
+              </div>
+            </div>
+
+            <div v-if="activeHomeworkBatch" class="space-y-4">
+              <div class="flex items-center justify-between text-xs text-[#777D76]">
+                <span>批次状态：<strong class="text-[#23322B]">{{ activeHomeworkBatch.status }}</strong> · 共 {{ activeHomeworkBatch.tasks.length }} 张图片</span>
+                <span v-if="activeHomeworkBatch.status === 'processing'" class="text-[#B84732]">后台限流识图中，请稍候刷新...</span>
+              </div>
+
+              <div class="divide-y divide-[#D6D6CD] border border-[#D6D6CD] bg-white">
+                <div v-for="task in activeHomeworkBatch.tasks" :key="task.id" class="p-4 space-y-2">
+                  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div class="flex items-center space-x-3 text-xs">
+                      <span class="font-mono text-[#23322B] font-medium">{{ task.filename }}</span>
+                      <span :class="task.match_status === 'matched' ? 'border-[#23322B] text-[#23322B]' : 'border-[#B84732] text-[#B84732]'"
+                            class="px-1.5 py-0.5 border text-[11px]">
+                        {{ task.match_status === 'matched' ? '已匹配' : '待指派' }}
+                      </span>
+                      <span class="text-[#777D76]">OCR: {{ task.ocr_status }}</span>
+                    </div>
+                    <div class="flex items-center space-x-2 text-xs">
+                      <select :value="task.student_id || ''"
+                              @change="assignHomeworkTaskStudent(task.id, $event.target.value)"
+                              class="bg-[#F8F7F3] border border-[#D6D6CD] py-1 px-2 text-xs text-[#23322B]">
+                        <option value="" disabled>选择归属学生...</option>
+                        <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
+                          {{ stu.student_no }}号 {{ stu.name }}
+                        </option>
+                      </select>
+                      <button @click="viewOriginalImage(task.file_path)" class="text-[#777D76] hover:text-[#23322B] underline">原图</button>
+                    </div>
+                  </div>
+                  <div v-if="task.parsed_items && task.parsed_items.length > 0" class="pl-4 border-l-2 border-[#D6D6CD] space-y-1">
+                    <label v-for="(it, idx) in task.parsed_items" :key="idx" class="flex items-center space-x-2 text-xs text-[#23322B]">
+                      <input type="checkbox" v-model="it.is_wrong" class="h-3.5 w-3.5 text-[#B84732] border-[#D6D6CD]">
+                      <span :class="it.is_wrong ? 'text-[#B84732]' : 'text-[#777D76]'">[{{ getModuleLabel(it.module_tag) }}]</span>
+                      <span class="truncate">{{ it.question_text }}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="activeHomeworkBatch.status === 'ready' || activeHomeworkBatch.status === 'partial_failed'" class="flex justify-end">
+                <button @click="submitHomeworkBatchConfirm" :disabled="isSubmitting"
+                        class="px-6 py-2.5 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium disabled:opacity-50">
+                  {{ isSubmitting ? '正在入库...' : '一键批量确认错题入库' }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -505,14 +591,29 @@
             <p class="text-xs text-[#777D76] tracking-wider uppercase mb-1">学生 / 单生追踪</p>
             <h1 class="font-editorial text-3xl sm:text-4xl font-normal text-[#23322B]">学情档案</h1>
           </div>
-          <div class="flex items-center space-x-4">
+          <div class="flex flex-wrap items-center gap-3">
+            <label class="inline-flex items-center space-x-1.5 text-xs text-[#777D76] cursor-pointer">
+              <input type="checkbox" v-model="includeArchived" @change="loadOverview" class="h-3.5 w-3.5 border-[#D6D6CD]">
+              <span>含已归档</span>
+            </label>
+
             <!-- Student Select -->
             <select v-model="trackingStudentId" @change="loadStudentDetail"
                     class="bg-[#F8F7F3] border border-[#D6D6CD] text-sm text-[#23322B] py-2 px-3 outline-none focus:border-[#23322B] transition">
               <option v-for="stu in overviewData.students" :key="stu.id" :value="stu.id">
-                {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }} · {{ stu.class_name || '六(1)班' }}
+                {{ stu.name }} {{ stu.student_no ? stu.student_no + '号' : '' }} · {{ stu.class_name || '六(1)班' }}{{ stu.focus_tier === 'archived' ? ' [已归档]' : '' }}
               </option>
             </select>
+
+            <button v-if="studentDetail?.student" @click="toggleStudentArchived"
+                    class="px-3 py-2 border border-[#D6D6CD] hover:border-[#B84732] text-xs text-[#777D76] hover:text-[#B84732] transition">
+              {{ studentDetail.student.focus_tier === 'archived' ? '恢复重点追踪' : '移出本期追踪' }}
+            </button>
+
+            <button @click="openStudentImportModal('file')"
+                    class="px-4 py-2 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium transition">
+              筛选导入学生
+            </button>
 
             <!-- Generate Parent Weekly Report Button -->
             <button @click="generateWechatReport"
@@ -1035,6 +1136,168 @@
               <path d="M8 23.5 C17 22 25 12 35 5.5 M23.5 5.5 H35 V17" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: 筛选导入学生 & DSH 批次核对 (Student Filter Import Modal) -->
+    <!-- ===================================================================== -->
+    <div v-if="showStudentImportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div class="fixed inset-0 bg-[#23322B]/25 backdrop-blur-[1px]" @click="showStudentImportModal = false"></div>
+      <div class="bg-[#F8F7F3] border border-[#D6D6CD] max-w-3xl w-full p-8 relative z-10 space-y-6 max-h-[88vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-3">
+          <div>
+            <h3 class="font-editorial text-2xl font-normal text-[#23322B]">筛选导入学生与成绩</h3>
+            <p class="text-xs text-[#777D76] mt-0.5">只导入需要重点跟进的学生，不混入无关名单</p>
+          </div>
+          <button @click="showStudentImportModal = false" class="text-2xl text-[#777D76] hover:text-[#23322B] leading-none">&times;</button>
+        </div>
+
+        <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-2">
+          <div class="flex space-x-6 text-xs">
+            <button @click="importModalTab = 'file'"
+                    :class="importModalTab === 'file' ? 'font-semibold text-[#23322B] border-b-2 border-[#B84732] pb-1' : 'text-[#777D76] pb-1'">
+              上传成绩单筛选 (.csv / .xlsx)
+            </button>
+            <button @click="importModalTab = 'dsh'; loadDshBatches()"
+                    :class="importModalTab === 'dsh' ? 'font-semibold text-[#23322B] border-b-2 border-[#B84732] pb-1' : 'text-[#777D76] pb-1'">
+              DSH + OCR 待确认批次 ({{ pendingDshBatches.length }})
+            </button>
+          </div>
+          <button @click="clearDemoStudents" class="text-[11px] text-[#777D76] hover:text-[#B84732] underline">
+            清空内置演示学生
+          </button>
+        </div>
+
+        <!-- Tab 1: CSV / XLSX Filter Import -->
+        <div v-if="importModalTab === 'file'" class="space-y-4">
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div>
+              <label class="block text-[#777D76] mb-1">筛选最低分</label>
+              <input type="number" v-model.number="importFilterMin" class="w-full bg-white border border-[#D6D6CD] px-2.5 py-1.5">
+            </div>
+            <div>
+              <label class="block text-[#777D76] mb-1">筛选最高分</label>
+              <input type="number" v-model.number="importFilterMax" class="w-full bg-white border border-[#D6D6CD] px-2.5 py-1.5">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-[#777D76] mb-1">测验名称（可选，有分数时记入成绩）</label>
+              <input type="text" v-model="importPaperTitle" placeholder="例如：第三单元随堂测" class="w-full bg-white border border-[#D6D6CD] px-2.5 py-1.5">
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center space-x-2 text-xs text-[#23322B] cursor-pointer">
+              <input type="checkbox" v-model="importOnlyDeclined" class="h-3.5 w-3.5 border-[#D6D6CD]">
+              <span>仅筛选较上次明显退步的学生（降 ≥ 5 分）</span>
+            </label>
+            <div>
+              <input type="file" id="rosterFileInput" accept=".csv,.xlsx,.xlsm" class="hidden" @change="handleRosterFileUpload">
+              <button @click="triggerRosterFileInput" :disabled="isImporting"
+                      class="px-4 py-2 bg-[#23322B] text-white text-xs font-medium disabled:opacity-50">
+                {{ isImporting ? '解析中...' : '选择表格并筛选预览' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="importPreviewItems.length > 0" class="space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-[#777D76]">共解析 {{ importPreviewItems.length }} 人，已自动勾选命中条件 {{ importPreviewItems.filter(i => i.selected).length }} 人</span>
+              <button @click="toggleImportSelectAll" class="text-[#B84732] hover:underline">全选 / 反选</button>
+            </div>
+            <div class="border border-[#D6D6CD] bg-white max-h-60 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-[#F1EFEA] border-b border-[#D6D6CD] text-[#777D76]">
+                  <tr>
+                    <th class="p-2">选</th>
+                    <th class="p-2">座号</th>
+                    <th class="p-2">姓名</th>
+                    <th class="p-2">原估分</th>
+                    <th class="p-2">本次分</th>
+                    <th class="p-2">动作</th>
+                    <th class="p-2">筛选说明</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[#D6D6CD]">
+                  <tr v-for="(item, idx) in importPreviewItems" :key="idx">
+                    <td class="p-2"><input type="checkbox" v-model="item.selected" class="h-3.5 w-3.5"></td>
+                    <td class="p-2 font-mono-num">{{ item.student_no }}</td>
+                    <td class="p-2 font-medium">{{ item.name }}</td>
+                    <td class="p-2 font-mono-num text-[#777D76]">{{ item.prev_score ?? '-' }}</td>
+                    <td class="p-2 font-mono-num font-semibold">{{ item.score ?? '-' }}</td>
+                    <td class="p-2">{{ item.action === 'create' ? '新建' : '更新' }}</td>
+                    <td class="p-2 text-[#777D76]">{{ item.reason }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="flex justify-end">
+              <button @click="commitStudentImport" :disabled="isImporting || importPreviewItems.filter(i => i.selected).length === 0"
+                      class="px-6 py-2.5 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium disabled:opacity-50">
+                确认导入 {{ importPreviewItems.filter(i => i.selected).length }} 名学生
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: DSH + OCR Batches Review -->
+        <div v-if="importModalTab === 'dsh'" class="space-y-4">
+          <div v-if="dshBatchesList.length === 0" class="py-8 text-center text-xs text-[#777D76]">
+            暂无由 DSH 发起的成绩单批处理记录。
+          </div>
+          <div v-else class="space-y-4">
+            <div class="divide-y divide-[#D6D6CD] border border-[#D6D6CD] bg-white max-h-40 overflow-y-auto">
+              <div v-for="b in dshBatchesList" :key="b.id" @click="viewDshBatchDetail(b.id)"
+                   :class="selectedDshBatchDetail?.id === b.id ? 'bg-[#F1EFEA]' : ''"
+                   class="p-3 flex items-center justify-between text-xs cursor-pointer hover:bg-[#F1EFEA]">
+                <div>
+                  <span class="font-medium text-[#23322B]">{{ b.title }}</span>
+                  <span class="text-[#777D76] ml-2 font-mono">{{ b.id }}</span>
+                </div>
+                <span :class="b.status === 'previewed' ? 'text-[#B84732] font-semibold' : 'text-[#777D76]'">{{ b.status }}</span>
+              </div>
+            </div>
+
+            <div v-if="selectedDshBatchDetail" class="border border-[#D6D6CD] bg-white p-4 space-y-3 text-xs">
+              <div class="flex items-center justify-between border-b border-[#D6D6CD] pb-2">
+                <span class="font-semibold text-[#23322B]">
+                  本地真名核对预览：{{ selectedDshBatchDetail.preview_plan?.exam_title || selectedDshBatchDetail.title }}
+                </span>
+                <span class="text-[#777D76]">状态: {{ selectedDshBatchDetail.status }}</span>
+              </div>
+
+              <div v-if="selectedDshBatchDetail.preview_plan?.students_to_import?.length" class="max-h-48 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="border-b border-[#D6D6CD] text-[#777D76]">
+                    <tr>
+                      <th class="py-1.5">座号</th>
+                      <th class="py-1.5">本地真名</th>
+                      <th class="py-1.5">本次分</th>
+                      <th class="py-1.5">拟导入</th>
+                      <th class="py-1.5">说明/异常</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-[#D6D6CD]">
+                    <tr v-for="(st, i) in selectedDshBatchDetail.preview_plan.students_to_import" :key="i">
+                      <td class="py-1.5 font-mono-num">{{ st.student_no }}</td>
+                      <td class="py-1.5 font-medium">{{ st.name }}</td>
+                      <td class="py-1.5 font-mono-num">{{ st.score ?? '-' }}</td>
+                      <td class="py-1.5">{{ st.recommended ? '✓ 纳入' : '跳过' }}</td>
+                      <td class="py-1.5 text-[#777D76]">{{ st.warning || st.reason }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="selectedDshBatchDetail.status === 'previewed'" class="flex justify-end pt-2">
+                <button @click="commitDshBatch(selectedDshBatchDetail.id)" :disabled="isImporting"
+                        class="px-5 py-2 bg-[#23322B] hover:bg-[#18231E] text-white text-xs font-medium disabled:opacity-50">
+                  确认入库该 DSH 批次
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

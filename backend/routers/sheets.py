@@ -49,9 +49,8 @@ L1_WARMUP_BANK = [
     }
 ]
 
-@router.post("/generate")
-async def generate_consolidation_sheets(req: GenerateSheetsRequest):
-    if not req.student_ids:
+async def generate_sheets_for_students(student_ids: List[int], batch_title: Optional[str] = "周末数学冲刺巩固单") -> Dict[str, Any]:
+    if not student_ids:
         raise HTTPException(status_code=400, detail="请至少勾选一名临界生")
 
     conn = get_connection()
@@ -62,7 +61,7 @@ async def generate_consolidation_sheets(req: GenerateSheetsRequest):
     created_sheets = []
     template_students = []
 
-    for stu_id in req.student_ids:
+    for stu_id in student_ids:
         # Fetch student info
         cursor.execute("SELECT * FROM students WHERE id = ?;", (stu_id,))
         stu = cursor.fetchone()
@@ -92,7 +91,7 @@ async def generate_consolidation_sheets(req: GenerateSheetsRequest):
             f2f_script = "聚焦单位'1'找法与分配律去括号，启发孩子口述第一步计算依据。"
 
         # Create consolidation sheet record
-        title = f"{stu['name']} - {req.batch_title or '周末数学个性化巩固单'}"
+        title = f"{stu['name']} - {batch_title or '周末数学个性化巩固单'}"
         cursor.execute("""
             INSERT INTO consolidation_sheets (
                 batch_code, student_id, title, status, face_to_face_script, parent_wechat_msg, created_at
@@ -273,7 +272,7 @@ async def generate_consolidation_sheets(req: GenerateSheetsRequest):
 
     # 4. Render Merged PDF with Playwright (Strictly on-demand!)
     template_data = {
-        "batch_title": req.batch_title or "周末数学冲刺巩固单",
+        "batch_title": batch_title or "周末数学冲刺巩固单",
         "batch_code": batch_code,
         "generated_date": datetime.now().strftime("%Y-%m-%d"),
         "students_data": template_students
@@ -297,6 +296,11 @@ async def generate_consolidation_sheets(req: GenerateSheetsRequest):
         "sheet_ids": created_sheets,
         "pdf_path": pdf_url
     }
+
+
+@router.post("/generate")
+async def generate_consolidation_sheets(req: GenerateSheetsRequest):
+    return await generate_sheets_for_students(req.student_ids, req.batch_title)
 
 @router.get("")
 def list_sheets():

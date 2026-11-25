@@ -1,28 +1,47 @@
 import json
 from collections import Counter
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from backend.routers.auth import verify_teacher_auth
 from backend.db import get_connection
 from backend.schemas import (
     StudentOverviewResponse, StudentResponse,
-    UpdateStudentSummaryRequest, ParentReportResponse
+    UpdateStudentSummaryRequest, ParentReportResponse,
+    StudentImportPreviewRequest, StudentImportCommitRequest,
+    StudentImportRow, UpdateFocusTierRequest,
+)
+from backend.services.desensitize import parse_roster_file
+from backend.services.import_service import (
+    VALID_TIERS,
+    commit_dsh_import_batch,
+    commit_student_import,
+    get_import_batch_for_ui,
+    preview_student_import,
 )
 from backend.services.llm_service import generate_student_report
 
 router = APIRouter(prefix="/api/students", tags=["students"], dependencies=[Depends(verify_teacher_auth)])
 
-@router.get("", response_model=StudentOverviewResponse)
-def get_students_overview():
+def build_students_overview(include_archived: bool = False, mask_names: bool = False) -> StudentOverviewResponse:
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("""
-        SELECT id, student_no, name, anonymous_code, class_name, focus_tier,
-               baseline_score, current_est_score, l3_summary_override, created_at
-        FROM students
-        ORDER BY student_no ASC;
-    """)
+    if include_archived:
+        cursor.execute("""
+            SELECT id, student_no, name, anonymous_code, class_name, focus_tier,
+                   baseline_score, current_est_score, l3_summary_override, created_at
+            FROM students
+            ORDER BY student_no ASC;
+        """)
+    else:
+        cursor.execute("""
+            SELECT id, student_no, name, anonymous_code, class_name, focus_tier,
+                   baseline_score, current_est_score, l3_summary_override, created_at
+            FROM students
+            WHERE focus_tier != 'archived'
+            ORDER BY student_no ASC;
+        """)
     students_raw = cursor.fetchall()
 
     student_list = []
@@ -115,7 +134,7 @@ def get_students_overview():
         student_list.append(StudentResponse(
             id=s["id"],
             student_no=s["student_no"],
-            name=s["name"],
+            name=s["anonymous_code"] if mask_names else s["name"],
             anonymous_code=s["anonymous_code"],
             class_name=s["class_name"],
             focus_tier=s["focus_tier"],
@@ -144,6 +163,139 @@ def get_students_overview():
         top_error_tags=top_tags,
         students=student_list
     )
+
+
+@router.get("", response_model=StudentOverviewResponse)
+def get_students_overview(include_archived: bool = False):
+    return build_students_overview(include_archived=include_archived, mask_names=False)
+
+
+@router.post("/import/parse-file")
+async def parse_and_preview_student_file(
+    file: UploadFile = File(...),
+    filter_min_score: Optional[float] = Form(40.0),
+    filter_max_score: Optional[float] = Form(58.0),
+    only_declined: bool = Form(False),
+    min_drop: float = Form(5.0),
+    focus_tier: str = Form("critical"),
+    paper_title: str = Form(""),
+):
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="请上传 CSV 或 XLSX 文件")
+    content = await file.read()
+    try:
+        raw_rows = parse_roster_file(file.filename, content)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"解析表格失败: {exc}")
+    if not raw_rows:
+        raise HTTPException(status_code=400, detail="未在表格中解析出有效学生记录")
+
+    req = StudentImportPreviewRequest(
+        rows=[StudentImportRow(**r) for r in raw_rows],
+        filter_min_score=filter_min_score,
+        filter_max_score=filter_max_score,
+        only_declined=only_declined,
+        min_drop=min_drop,
+        focus_tier=focus_tier,
+        paper_title=paper_title,
+    )
+    conn = get_connection()
+    res = preview_student_import(conn, req)
+    conn.close()
+    return res
+
+
+@router.post("/import/preview")
+def api_preview_student_import(req: StudentImportPreviewRequest):
+    conn = get_connection()
+    res = preview_student_import(conn, req)
+    conn.close()
+    return res
+
+
+@router.post("/import/commit")
+def api_commit_student_import(req: StudentImportCommitRequest):
+    conn = get_connection()
+    res = commit_student_import(conn, req)
+    conn.close()
+    return res
+
+
+@router.get("/import/batches")
+def list_import_batches(batch_type: Optional[str] = None):
+    conn = get_connection()
+    cursor = conn.cursor()
+    if batch_type:
+        cursor.execute(
+            """
+            SELECT id, batch_type, source, status, title, paper_id, created_at, updated_at
+            FROM import_batches WHERE batch_type = ? ORDER BY created_at DESC LIMIT 30;
+            """,
+            (batch_type,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, batch_type, source, status, title, paper_id, created_at, updated_at
+            FROM import_batches ORDER BY created_at DESC LIMIT 30;
+            """
+        )
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+@router.get("/import/batches/{batch_id}")
+def get_import_batch_detail(batch_id: str):
+    conn = get_connection()
+    data = get_import_batch_for_ui(conn, batch_id)
+    conn.close()
+    if not data:
+        raise HTTPException(status_code=404, detail="导入批次不存在")
+    return data
+
+
+@router.post("/import/batches/{batch_id}/commit")
+def commit_import_batch_from_ui(batch_id: str):
+    conn = get_connection()
+    try:
+        res = commit_dsh_import_batch(conn, batch_id, confirmed_by_user=True)
+    except ValueError as exc:
+        conn.close()
+        raise HTTPException(status_code=400, detail=str(exc))
+    conn.close()
+    return res
+
+
+@router.post("/clear-demo")
+def clear_demo_students():
+    """Removes the 5 built-in preset demo students so teacher can start from real roster."""
+    demo_codes = ("g6_c01_s01", "g6_c01_s08", "g6_c01_s15", "g6_c01_s22", "g6_c01_s33")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        f"DELETE FROM students WHERE anonymous_code IN ({','.join(['?'] * len(demo_codes))});",
+        demo_codes,
+    )
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return {"success": True, "deleted_count": deleted}
+
+
+@router.patch("/{student_id}/tier")
+def update_student_focus_tier(student_id: int, req: UpdateFocusTierRequest):
+    if req.focus_tier not in VALID_TIERS:
+        raise HTTPException(status_code=400, detail=f"无效分层状态: {req.focus_tier}")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE students SET focus_tier = ? WHERE id = ?;", (req.focus_tier, student_id))
+    if cursor.rowcount == 0:
+        conn.close()
+        raise HTTPException(status_code=404, detail="学生不存在")
+    conn.commit()
+    conn.close()
+    return {"success": True, "student_id": student_id, "focus_tier": req.focus_tier}
 
 @router.get("/{student_id}")
 def get_student_detail(student_id: int):

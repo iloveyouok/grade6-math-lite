@@ -143,12 +143,56 @@ def init_db():
     );
     """)
 
-    # Check if students are empty, if so, seed preset data
+    # 9. import_batches (student filtering import, homework batches, DSH OCR batches)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS import_batches (
+        id TEXT PRIMARY KEY,
+        batch_type TEXT NOT NULL,
+        source TEXT DEFAULT 'workbench',
+        status TEXT DEFAULT 'pending',
+        title TEXT DEFAULT '',
+        paper_id INTEGER REFERENCES exam_papers(id) ON DELETE SET NULL,
+        raw_ocr_json TEXT DEFAULT '[]',
+        preview_plan_json TEXT DEFAULT '{}',
+        summary_json TEXT DEFAULT '{}',
+        created_at TEXT,
+        updated_at TEXT
+    );
+    """)
+
+    # 10. ocr_tasks (per-image homework OCR queue)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ocr_tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id TEXT NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+        filename TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        student_id INTEGER REFERENCES students(id) ON DELETE SET NULL,
+        match_status TEXT DEFAULT 'unmatched',
+        match_note TEXT DEFAULT '',
+        ocr_status TEXT DEFAULT 'pending',
+        parsed_items_json TEXT DEFAULT '[]',
+        error_msg TEXT DEFAULT '',
+        created_at TEXT,
+        updated_at TEXT
+    );
+    """)
+
+    # Unique class + student_no index for safe incremental upsert
+    try:
+        cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_students_class_no
+        ON students(class_name, student_no);
+        """)
+    except sqlite3.IntegrityError:
+        pass
+
+    # Check if students are empty, if so, seed preset demo students when enabled
     cursor.execute("SELECT COUNT(*) FROM students;")
     count = cursor.fetchone()[0]
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if count == 0:
+    if count == 0 and settings.SEED_DEMO_DATA:
         seed_students = [
             ("01", "张伟", "g6_c01_s01", "六(1)班", "critical", 48.0, 52.0, "分数运算中乘法分配律掌握薄弱，找单位1偶有乘除混淆。"),
             ("08", "李芳", "g6_c01_s08", "六(1)班", "critical", 45.0, 48.0, "比的按比分配容易漏除以2，计算耐心不够。"),
@@ -161,6 +205,8 @@ def init_db():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [(s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], now_str) for s in seed_students])
 
+    cursor.execute("SELECT COUNT(*) FROM exam_papers;")
+    if cursor.fetchone()[0] == 0:
         # Preset Exam Paper
         cursor.execute("""
             INSERT INTO exam_papers (title, unit_tag, exam_date, total_score, created_at)
@@ -196,6 +242,8 @@ def init_db():
             VALUES (?, ?, ?, ?, ?, ?)
         """, [(paper_id, q[0], q[1], q[2], q[3], json.dumps(q[4], ensure_ascii=False)) for q in preset_questions])
 
+    cursor.execute("SELECT COUNT(*) FROM variant_pool;")
+    if cursor.fetchone()[0] == 0:
         # Preset Variant Pool Seeds
         preset_variants = [
             ("G6-CALC-01", "calc", "黄冈密卷 变式精选", "计算：$\\frac{4}{7} \\times \\frac{3}{8} + \\frac{4}{7} \\times \\frac{5}{8}$", "", "原式 $= \\frac{4}{7} \\times (\\frac{3}{8} + \\frac{5}{8}) = \\frac{4}{7} \\times 1 = \\frac{4}{7}$", 1, now_str),

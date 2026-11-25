@@ -5,10 +5,12 @@ from pydantic import Field
 class Settings(BaseSettings):
     # Debug / Mock Switch
     MOCK_EXTERNAL_APIS: bool = Field(default=True)
-    
-    # Auth
+    SEED_DEMO_DATA: bool = Field(default=True)
+
+    # Auth & MCP Bridge
     TEACHER_ACCESS_PASSWORD: str = Field(default="math2026")
     SESSION_COOKIE_NAME: str = Field(default="g6_teacher_session")
+    MCP_AUTH_TOKEN: str = Field(default="dev-mcp-token-change-me")
     
     # DeepSeek
     DEEPSEEK_API_KEY: str = Field(default="sk-mock")
@@ -34,6 +36,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = Field(default="data/uploads")
     CROPPED_DIR: str = Field(default="data/cropped")
     PDFS_DIR: str = Field(default="data/pdfs")
+    BATCHES_DIR: str = Field(default="data/batches")
 
     class Config:
         env_file = ".env"

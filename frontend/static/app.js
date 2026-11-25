@@ -25,6 +25,24 @@ createApp({
       top_error_tags: [],
       students: []
     });
+    const includeArchived = ref(false);
+
+    // Student Import & DSH Batch Review state
+    const showStudentImportModal = ref(false);
+    const importModalTab = ref('file');
+    const importFilterMin = ref(40);
+    const importFilterMax = ref(58);
+    const importOnlyDeclined = ref(false);
+    const importPaperTitle = ref('');
+    const importPreviewBatchId = ref(null);
+    const importPreviewItems = ref([]);
+    const isImporting = ref(false);
+    const dshBatchesList = ref([]);
+    const selectedDshBatchDetail = ref(null);
+
+    // Batch Homework OCR state
+    const homeworkBatchesList = ref([]);
+    const activeHomeworkBatch = ref(null);
 
     // Fast Entry Tab A state
     const examList = ref([]);
@@ -125,7 +143,7 @@ createApp({
     // Load Overview Data
     const loadOverview = async () => {
       try {
-        const resp = await fetch('/api/students');
+        const resp = await fetch(`/api/students?include_archived=${includeArchived.value ? 'true' : 'false'}`);
         if (resp.status === 401) {
           window.location.href = '/login.html';
           return;
@@ -133,18 +151,187 @@ createApp({
         overviewData.value = await resp.json();
         const stus = overviewData.value.students;
         if (stus.length > 0) {
-          if (!currentStudentId.value) currentStudentId.value = stus[0].id;
-          if (!ocrStudentId.value) ocrStudentId.value = stus[0].id;
-          if (!trackingStudentId.value) {
+          if (!currentStudentId.value || !stus.some(s => s.id === currentStudentId.value)) currentStudentId.value = stus[0].id;
+          if (!ocrStudentId.value || !stus.some(s => s.id === ocrStudentId.value)) ocrStudentId.value = stus[0].id;
+          if (!trackingStudentId.value || !stus.some(s => s.id === trackingStudentId.value)) {
             trackingStudentId.value = stus[0].id;
             loadStudentDetail();
           }
           if (selectedStudentIds.value.length === 0) {
-            selectedStudentIds.value = stus.map(s => s.id);
+            selectedStudentIds.value = stus.filter(s => s.focus_tier !== 'archived').map(s => s.id);
           }
+        } else {
+          studentDetail.value = null;
         }
       } catch (err) {
         console.error('Failed to load overview:', err);
+      }
+    };
+
+    const pendingDshBatches = computed(() => {
+      return dshBatchesList.value.filter(b => b.status === 'previewed');
+    });
+
+    const loadDshBatches = async () => {
+      try {
+        const resp = await fetch('/api/students/import/batches?batch_type=dsh_grade_sheet');
+        if (resp.ok) {
+          dshBatchesList.value = await resp.json();
+        }
+      } catch (err) {
+        console.error('Failed to load DSH batches:', err);
+      }
+    };
+
+    const viewDshBatchDetail = async (batchId) => {
+      try {
+        const resp = await fetch(`/api/students/import/batches/${batchId}`);
+        if (resp.ok) {
+          selectedDshBatchDetail.value = await resp.json();
+        }
+      } catch (err) {
+        alert('加载 DSH 批次详情失败');
+      }
+    };
+
+    const openDshReviewFromHome = async (batchId) => {
+      showStudentImportModal.value = true;
+      importModalTab.value = 'dsh';
+      await loadDshBatches();
+      await viewDshBatchDetail(batchId);
+    };
+
+    const commitDshBatch = async (batchId) => {
+      if (isImporting.value) return;
+      isImporting.value = true;
+      try {
+        const resp = await fetch(`/api/students/import/batches/${batchId}/commit`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          alert(`入库完成！新建学生 ${data.students_created} 人，更新 ${data.students_updated} 人，录入错题 ${data.mistakes_inserted} 道。`);
+          showStudentImportModal.value = false;
+          await loadDshBatches();
+          await loadOverview();
+        } else {
+          alert('入库失败: ' + (data.detail || '未知错误'));
+        }
+      } catch (err) {
+        alert('网络请求失败');
+      } finally {
+        isImporting.value = false;
+      }
+    };
+
+    const openStudentImportModal = (tab = 'file') => {
+      importModalTab.value = tab;
+      showStudentImportModal.value = true;
+      if (tab === 'dsh') loadDshBatches();
+    };
+
+    const triggerRosterFileInput = () => {
+      const el = document.getElementById('rosterFileInput');
+      if (el) el.click();
+    };
+
+    const handleRosterFileUpload = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      isImporting.value = true;
+      const fd = new FormData();
+      fd.append('file', file);
+      if (importFilterMin.value !== '' && importFilterMin.value !== null) fd.append('filter_min_score', importFilterMin.value);
+      if (importFilterMax.value !== '' && importFilterMax.value !== null) fd.append('filter_max_score', importFilterMax.value);
+      fd.append('only_declined', importOnlyDeclined.value ? 'true' : 'false');
+      fd.append('paper_title', importPaperTitle.value || '');
+      try {
+        const resp = await fetch('/api/students/import/parse-file', { method: 'POST', body: fd });
+        const data = await resp.json();
+        if (resp.ok) {
+          importPreviewBatchId.value = data.batch_id;
+          importPreviewItems.value = data.items || [];
+        } else {
+          alert('解析失败: ' + (data.detail || '未知错误'));
+        }
+      } catch (err) {
+        alert('网络请求失败');
+      } finally {
+        isImporting.value = false;
+        e.target.value = '';
+      }
+    };
+
+    const toggleImportSelectAll = () => {
+      const allSel = importPreviewItems.value.every(i => i.selected);
+      importPreviewItems.value.forEach(i => { i.selected = !allSel; });
+    };
+
+    const commitStudentImport = async () => {
+      const selected = importPreviewItems.value.filter(i => i.selected);
+      if (selected.length === 0 || isImporting.value) return;
+      isImporting.value = true;
+      try {
+        const resp = await fetch('/api/students/import/commit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            batch_id: importPreviewBatchId.value,
+            paper_title: importPaperTitle.value || '',
+            students: selected.map(s => ({
+              student_no: s.student_no,
+              name: s.name,
+              class_name: s.class_name,
+              score: s.score,
+              focus_tier: 'critical',
+              selected: true
+            }))
+          })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          alert(`导入成功！新建 ${data.created_count} 人，更新 ${data.updated_count} 人。`);
+          showStudentImportModal.value = false;
+          importPreviewItems.value = [];
+          await loadOverview();
+        } else {
+          alert('导入失败: ' + (data.detail || '未知错误'));
+        }
+      } catch (err) {
+        alert('网络请求失败');
+      } finally {
+        isImporting.value = false;
+      }
+    };
+
+    const clearDemoStudents = async () => {
+      if (!confirm('确认清空内置的 5 名演示学生吗？（不影响你自行导入的真实学生）')) return;
+      try {
+        const resp = await fetch('/api/students/clear-demo', { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok) {
+          alert(`已清空 ${data.deleted_count} 名演示学生。`);
+          await loadOverview();
+        }
+      } catch (err) {
+        alert('清空失败');
+      }
+    };
+
+    const toggleStudentArchived = async () => {
+      if (!studentDetail.value?.student) return;
+      const stu = studentDetail.value.student;
+      const nextTier = stu.focus_tier === 'archived' ? 'critical' : 'archived';
+      try {
+        const resp = await fetch(`/api/students/${stu.id}/tier`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ focus_tier: nextTier })
+        });
+        if (resp.ok) {
+          await loadOverview();
+          await loadStudentDetail();
+        }
+      } catch (err) {
+        alert('更新跟踪状态失败');
       }
     };
 
@@ -317,30 +504,135 @@ createApp({
     };
 
     const handleOcrFileUpload = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
 
+      const isSingleImage = files.length === 1 && !files[0].name.toLowerCase().endsWith('.zip');
       isOcrLoading.value = true;
-      ocrParsedResults.value = [];
 
-      const formData = new FormData();
-      formData.append('file', file);
+      if (isSingleImage) {
+        ocrParsedResults.value = [];
+        const formData = new FormData();
+        formData.append('file', files[0]);
+        try {
+          const resp = await fetch('/api/ocr/upload', { method: 'POST', body: formData });
+          const data = await resp.json();
+          if (resp.ok) {
+            ocrParsedResults.value = data;
+          } else {
+            alert('OCR 识别失败: ' + (data.detail || '未知错误'));
+          }
+        } catch (err) {
+          alert('网络请求失败');
+        } finally {
+          isOcrLoading.value = false;
+          e.target.value = '';
+        }
+        return;
+      }
 
+      // Multi-image or ZIP batch upload
+      const batchFd = new FormData();
+      files.forEach(f => batchFd.append('files', f));
+      batchFd.append('title', files[0].name.toLowerCase().endsWith('.zip') ? files[0].name : `多图作业导入 (${files.length}张)`);
       try {
-        const resp = await fetch('/api/ocr/upload', {
-          method: 'POST',
-          body: formData
-        });
+        const resp = await fetch('/api/ocr/batch-upload', { method: 'POST', body: batchFd });
         const data = await resp.json();
-        if (resp.ok) {
-          ocrParsedResults.value = data;
+        if (resp.ok && data.success) {
+          await loadHomeworkBatches();
+          await selectHomeworkBatch(data.batch_id);
         } else {
-          alert('OCR 识别失败: ' + (data.detail || '未知错误'));
+          alert('批量上传失败: ' + (data.detail || '未知错误'));
         }
       } catch (err) {
         alert('网络请求失败');
       } finally {
         isOcrLoading.value = false;
+        e.target.value = '';
+      }
+    };
+
+    const loadHomeworkBatches = async () => {
+      try {
+        const resp = await fetch('/api/ocr/batches');
+        if (resp.ok) {
+          homeworkBatchesList.value = await resp.json();
+        }
+      } catch (err) {}
+    };
+
+    const selectHomeworkBatch = async (batchId) => {
+      if (!batchId) return;
+      try {
+        const resp = await fetch(`/api/ocr/batches/${batchId}`);
+        if (resp.ok) {
+          activeHomeworkBatch.value = await resp.json();
+          if (activeHomeworkBatch.value.status === 'processing') {
+            setTimeout(() => selectHomeworkBatch(batchId), 2000);
+          }
+        }
+      } catch (err) {}
+    };
+
+    const assignHomeworkTaskStudent = async (taskId, stuIdVal) => {
+      if (!stuIdVal || !activeHomeworkBatch.value) return;
+      try {
+        const resp = await fetch(`/api/ocr/tasks/${taskId}/assign`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: parseInt(stuIdVal, 10) })
+        });
+        if (resp.ok) {
+          await selectHomeworkBatch(activeHomeworkBatch.value.id);
+        }
+      } catch (err) {
+        alert('指派学生失败');
+      }
+    };
+
+    const submitHomeworkBatchConfirm = async () => {
+      if (!activeHomeworkBatch.value || isSubmitting.value) return;
+      const readyTasks = (activeHomeworkBatch.value.tasks || []).filter(t => t.student_id && t.parsed_items && t.parsed_items.length > 0);
+      if (readyTasks.length === 0) {
+        alert('请先为已识别的作业图片指派归属学生');
+        return;
+      }
+      isSubmitting.value = true;
+      try {
+        const payload = {
+          tasks: readyTasks.map(t => ({
+            task_id: t.id,
+            student_id: t.student_id,
+            items: t.parsed_items.map(it => ({
+              kb_mother_id: it.kb_mother_id || 'G6-CALC-01',
+              module_tag: it.module_tag || 'calc',
+              question_snapshot: it.question_text || '',
+              error_tags: it.error_tags || [],
+              photo_url: it.crop_url || t.file_path,
+              ocr_note: it.student_answer || '',
+              face_to_face_script: it.face_to_face_script || '',
+              is_wrong: !!it.is_wrong
+            }))
+          }))
+        };
+        const resp = await fetch(`/api/ocr/batches/${activeHomeworkBatch.value.id}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (resp.ok && data.success) {
+          alert(`批量入库完成！共录入 ${data.inserted_count} 道错题。`);
+          await loadHomeworkBatches();
+          await selectHomeworkBatch(activeHomeworkBatch.value.id);
+          await loadOverview();
+        } else {
+          alert('批量入库失败: ' + (data.detail || '未知错误'));
+        }
+      } catch (err) {
+        alert('网络请求失败');
+      } finally {
+        isSubmitting.value = false;
       }
     };
 
@@ -405,6 +697,9 @@ createApp({
         const data = await resp.json();
         if (data.has_new && data.data) {
           ocrParsedResults.value = data.data.parsed_items || [];
+          if (data.data.student_id) {
+            ocrStudentId.value = data.data.student_id;
+          }
           alert(`已同步到手机最新上传的 ${ocrParsedResults.value.length} 道题目！`);
         } else {
           alert('暂无手机端最新直传记录');
@@ -711,7 +1006,9 @@ createApp({
         const qrEl = document.getElementById('qrcode');
         if (qrEl) {
           qrEl.innerHTML = '';
-          const uploadUrl = window.location.origin + '/upload.html';
+          const uploadUrl = ocrStudentId.value
+            ? `${window.location.origin}/upload.html?student_id=${ocrStudentId.value}`
+            : `${window.location.origin}/upload.html`;
           new QRCode(qrEl, {
             text: uploadUrl,
             width: 104,
@@ -731,6 +1028,8 @@ createApp({
       await loadExams();
       await loadSheets();
       await loadMotherQuestions();
+      await loadDshBatches();
+      await loadHomeworkBatches();
       renderQrCode();
     });
 
@@ -742,6 +1041,35 @@ createApp({
       isSubmitting,
       currentDateStr,
       overviewData,
+      includeArchived,
+      showStudentImportModal,
+      importModalTab,
+      importFilterMin,
+      importFilterMax,
+      importOnlyDeclined,
+      importPaperTitle,
+      importPreviewItems,
+      isImporting,
+      dshBatchesList,
+      pendingDshBatches,
+      selectedDshBatchDetail,
+      openStudentImportModal,
+      openDshReviewFromHome,
+      loadDshBatches,
+      viewDshBatchDetail,
+      commitDshBatch,
+      triggerRosterFileInput,
+      handleRosterFileUpload,
+      toggleImportSelectAll,
+      commitStudentImport,
+      clearDemoStudents,
+      toggleStudentArchived,
+      homeworkBatchesList,
+      activeHomeworkBatch,
+      loadHomeworkBatches,
+      selectHomeworkBatch,
+      assignHomeworkTaskStudent,
+      submitHomeworkBatchConfirm,
       pendingSheetsList,
       pendingSheetsCount,
       latestBatch,
@@ -774,6 +1102,7 @@ createApp({
       getOcrWrongCount,
       submitOcrConfirm,
       checkMobileUpload,
+      renderQrCode,
       viewOriginalImage,
       trackingStudentId,
       studentDetail,

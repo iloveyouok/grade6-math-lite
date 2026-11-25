@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
 from backend.db import init_db
 from backend.services.kb_retriever import load_kb_vectors
-from backend.routers import auth, students, exams, ocr_upload, sheets, kb
+from backend.routers import auth, students, exams, ocr_upload, sheets, kb, mcp_server
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.CROPPED_DIR, exist_ok=True)
     os.makedirs(settings.PDFS_DIR, exist_ok=True)
+    os.makedirs(settings.BATCHES_DIR, exist_ok=True)
 
     # 1. Initialize SQLite Database (WAL mode & seeding)
     init_db()
@@ -49,8 +50,10 @@ app.include_router(auth.router)
 app.include_router(students.router)
 app.include_router(exams.router)
 app.include_router(ocr_upload.router)
+app.include_router(ocr_upload.batches_router)
 app.include_router(sheets.router)
 app.include_router(kb.router)
+app.include_router(mcp_server.router)
 
 # Mount Static & Data Storage Directories
 frontend_dir = os.path.join(os.path.dirname(__file__), "..", "frontend")
